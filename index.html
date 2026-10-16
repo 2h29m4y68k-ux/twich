@@ -1,0 +1,1034 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0e0e10">
+  <title>TWITCH SIM — симулятор стрима</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0e0e10;
+      --panel: #18181b;
+      --panel-soft: #1f1f23;
+      --line: #303036;
+      --muted: #adadb8;
+      --text: #efeff1;
+      --purple: #9147ff;
+      --purple-light: #bf94ff;
+      --red: #eb0400;
+      --green: #00c853;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { width: 100%; min-width: 320px; height: 100%; margin: 0; }
+    body { overflow: hidden; background: var(--bg); color: var(--text); }
+    button { font: inherit; color: inherit; }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--purple-light); outline-offset: 2px; }
+
+    .app { height: 100dvh; display: flex; flex-direction: column; }
+    .topbar {
+      height: 60px; flex: 0 0 60px; display: flex; align-items: center; gap: 22px;
+      padding: 0 22px; background: #18181b; border-bottom: 1px solid #26262c; z-index: 5;
+    }
+    .brand { display: flex; align-items: center; gap: 9px; font-size: 17px; font-weight: 900; letter-spacing: -.5px; white-space: nowrap; }
+    .brand-mark { width: 26px; height: 28px; color: var(--purple-light); }
+    .brand em { color: var(--purple-light); font-style: normal; }
+    .top-divider { width: 1px; height: 25px; background: #3a3a40; }
+    .top-title { min-width: 0; flex: 1; }
+    .top-title strong { display: block; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+    .top-title span { color: var(--muted); font-size: 11px; }
+    .top-live { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #65656c; }
+    .top-live.is-live { color: #ff7774; }
+    .top-live.is-live .live-dot { background: var(--red); box-shadow: 0 0 12px #eb040088; animation: pulse 1.7s infinite; }
+    @keyframes pulse { 50% { opacity: .45; } }
+
+    .layout { position: relative; flex: 1; min-height: 0; }
+    .stage-column { position: absolute; inset: 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: #0e0e10; }
+    .stage {
+      position: relative; flex: 1; min-height: 0; overflow: hidden; display: grid; place-items: center;
+      background: radial-gradient(ellipse at 50% 43%, #292333 0, #17151c 42%, #101013 78%);
+    }
+    .stage::before {
+      position: absolute; inset: 0; content: ""; opacity: .17; pointer-events: none;
+      background-image: linear-gradient(135deg, transparent 49.8%, #ffffff0a 50%, transparent 50.2%);
+      background-size: 34px 34px;
+    }
+    #cameraVideo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #09090b; }
+    #cameraVideo.mirror { transform: scaleX(-1); }
+    .empty-state { position: relative; z-index: 1; width: min(430px, 90%); text-align: center; pointer-events: none; }
+    .camera-art {
+      width: 82px; height: 82px; margin: 0 auto 22px; display: grid; place-items: center;
+      border: 1px solid #ffffff16; border-radius: 26px; background: linear-gradient(145deg, #26232d, #18171b);
+      box-shadow: 0 15px 60px #0005; color: #c4a4ff;
+    }
+    .camera-art svg { width: 38px; height: 38px; }
+    .empty-state h1 { margin: 0 0 9px; font-size: clamp(20px, 2.4vw, 28px); letter-spacing: -.7px; }
+    .empty-state p { margin: 0 auto; max-width: 350px; color: #aaa7b1; font-size: 14px; line-height: 1.6; }
+    .stage.has-video .empty-state { display: none; }
+    .video-shade { position: absolute; inset: auto 0 0; height: 150px; pointer-events: none; background: linear-gradient(transparent, #0008); }
+    .stage-chips { position: absolute; inset: 18px 20px auto; z-index: 2; display: flex; align-items: center; gap: 9px; }
+    .chip { display: inline-flex; min-height: 26px; align-items: center; gap: 7px; padding: 5px 9px; border-radius: 5px; background: #111114d9; font-size: 11px; font-weight: 800; letter-spacing: .2px; }
+    .chip-live { background: var(--red); }
+    .chip-viewers { font-variant-numeric: tabular-nums; }
+    .stage-timer { margin-left: auto; font-variant-numeric: tabular-nums; }
+    .camera-label { position: absolute; right: 20px; bottom: 18px; z-index: 2; padding: 7px 10px; border-radius: 6px; background: #111114b8; color: #eee; font-size: 11px; }
+
+    .stream-info {
+      min-height: 80px; flex: 0 0 auto; display: flex; align-items: center; gap: 15px;
+      padding: 13px 22px; background: #18181b; border-top: 1px solid #26262c;
+    }
+    .avatar-main { width: 44px; height: 44px; flex: 0 0 44px; display: grid; place-items: center; border-radius: 50%; background: linear-gradient(135deg,#a970ff,#5430a0); font-size: 21px; }
+    .stream-copy { flex: 1; min-width: 0; }
+    .stream-copy strong { display: block; overflow: hidden; margin-bottom: 4px; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+    .stream-copy span { color: var(--muted); font-size: 12px; }
+    .tag { margin-left: 5px; padding: 4px 7px; border-radius: 4px; background: #303036; color: #dedee3 !important; font-size: 10px !important; }
+    .stream-actions { display: flex; gap: 8px; }
+    .icon-button {
+      width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid #3b3b42;
+      border-radius: 9px; background: #252529; color: #ddd; cursor: pointer; transition: background .15s, border-color .15s;
+    }
+    .icon-button:hover { background: #33333a; border-color: #686871; }
+    .icon-button.active { color: #d8c2ff; border-color: #7852b6; background: #39285a; }
+    .icon-button svg { width: 18px; height: 18px; }
+    .controlbar {
+      height: 73px; flex: 0 0 73px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 0 22px; background: #18181b; border-top: 1px solid #26262c;
+    }
+    .control-left, .control-right { display: flex; align-items: center; gap: 9px; }
+    .primary-button, .end-button, .secondary-button {
+      min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+      padding: 0 16px; border: 0; border-radius: 8px; font-size: 13px; font-weight: 800; cursor: pointer;
+      transition: filter .15s, transform .15s, background .15s;
+    }
+    .primary-button { min-width: 153px; background: var(--purple); color: white; box-shadow: 0 4px 18px #9147ff30; }
+    .primary-button:hover { background: #772ce8; }
+    .end-button { min-width: 153px; display: none; background: #3b2022; color: #ff8986; border: 1px solid #6d3031; }
+    .end-button:hover { background: #56272a; }
+    .secondary-button { background: #28282d; border: 1px solid #414148; color: #eee; }
+    .secondary-button:hover { background: #37373e; }
+    button:disabled { opacity: .48; cursor: not-allowed; }
+    .control-hint { color: #92929d; font-size: 11px; }
+    .sound-state { color: #aaaab4; font-size: 11px; }
+
+    .chat-panel {
+      position: absolute; z-index: 3; right: auto; bottom: 16px; left: 18px;
+      width: min(440px, calc(100% - 36px)); height: min(48%, 390px);
+      min-width: 0; display: flex; flex-direction: column; pointer-events: none;
+    }
+    .chat-head, .chat-intro { display: none; }
+    .chat-feed {
+      flex: 1; min-height: 0; overflow-y: auto; padding: 12px 8px 5px 1px;
+      display: flex; flex-direction: column; justify-content: flex-end;
+      scrollbar-width: none; mask-image: linear-gradient(to bottom, transparent 0, #000 12%);
+      pointer-events: auto;
+    }
+    .chat-feed::-webkit-scrollbar { display: none; }
+    .chat-line {
+      width: fit-content; max-width: 100%; display: flex; align-items: baseline; gap: 7px;
+      margin: 0 0 7px; padding: 6px 10px 6px 7px; border: 1px solid #ffffff36; border-radius: 9px;
+      background: linear-gradient(135deg, #ffffff29, #ffffff0b 58%, #c5aaff18);
+      box-shadow: inset 0 1px 0 #ffffff25, 0 4px 16px #0004;
+      -webkit-backdrop-filter: blur(12px) saturate(155%); backdrop-filter: blur(12px) saturate(155%);
+      animation: appear .25s ease-out; line-height: 1.4; overflow-wrap: anywhere;
+    }
+    @keyframes appear { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    .chat-avatar { width: 21px; height: 21px; flex: 0 0 21px; display: grid; place-items: center; align-self: flex-start; margin-top: 1px; border-radius: 50%; font-size: 11px; }
+    .chat-name { flex: 0 0 auto; font-size: 12px; font-weight: 800; }
+    .chat-message { min-width: 0; color: #e2e2e7; font-size: 12px; }
+    .system-message { width: fit-content; margin: 6px 0; padding: 6px 9px; border-radius: 7px; background: #09090b65; color: #e0ceff; font-size: 11px; text-shadow: 0 1px 3px #000; }
+    .chat-foot { flex: 0 0 auto; padding: 7px 0 0; pointer-events: auto; }
+    .chat-prompt { display: none; }
+    .chat-input-row { display: flex; align-items: center; gap: 8px; }
+    .chat-input { width: 100%; min-width: 0; height: 38px; padding: 0 11px; border: 1px solid #ffffff40; border-radius: 9px; background: #17151db8; color: var(--text); font: inherit; font-size: 12px; box-shadow: 0 3px 12px #0004; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+    .chat-send { width: 39px; height: 38px; flex: 0 0 39px; display: grid; place-items: center; border: 1px solid #ffffff40; border-radius: 9px; background: #17151db8; cursor: pointer; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+    .chat-send:hover { background: #772ce8; }
+    .chat-send svg { width: 17px; height: 17px; }
+    .chat-send:disabled { background: #38383f; }
+    .chat-note { display: none; }
+    .toast {
+      position: absolute; z-index: 10; top: 18px; left: 50%; width: min(480px, calc(100% - 32px));
+      padding: 12px 15px; transform: translateX(-50%); border: 1px solid #703638; border-radius: 9px;
+      background: #321c1f; color: #ffd2d0; font-size: 12px; line-height: 1.45; box-shadow: 0 12px 35px #0008;
+    }
+    .toast[hidden] { display: none; }
+    .toast strong { display: block; margin-bottom: 2px; }
+    @media (max-width: 760px) {
+      .app { height: 100dvh; min-height: 0; }
+      .topbar { height: 50px; flex-basis: 50px; gap: 12px; padding: 0 14px; }
+      .brand { font-size: 15px; gap: 6px; }
+      .brand-mark { width: 22px; height: 24px; }
+      .top-divider, .top-title span { display: none; }
+      .top-title strong { font-size: 12px; }
+      .top-live { font-size: 10px; }
+      .layout { display: block; position: relative; }
+      .stage { flex: 1; min-height: 0; }
+      .stage::before { opacity: .1; }
+      .stage-chips { inset: max(12px, env(safe-area-inset-top)) 12px auto; gap: 6px; }
+      .chip { min-height: 25px; padding: 5px 8px; font-size: 10px; }
+      .empty-state { width: min(340px, 86%); }
+      .camera-art { width: 67px; height: 67px; margin-bottom: 17px; border-radius: 21px; }
+      .empty-state h1 { font-size: 21px; }
+      .empty-state p { font-size: 12px; }
+      .camera-label { right: 12px; bottom: 12px; font-size: 10px; }
+      .stream-info { min-height: 63px; padding: 9px 13px; gap: 10px; }
+      .avatar-main { width: 36px; height: 36px; flex-basis: 36px; font-size: 18px; }
+      .stream-copy strong { font-size: 12px; }
+      .stream-copy span { font-size: 10px; }
+      .stream-actions { gap: 6px; }
+      .icon-button { width: 34px; height: 34px; border-radius: 8px; }
+      .controlbar { height: 62px; flex-basis: 62px; padding: 0 12px max(0px, env(safe-area-inset-bottom)); gap: 7px; }
+      .control-left, .control-right { gap: 6px; }
+      .primary-button, .end-button { min-width: 0; min-height: 39px; padding: 0 13px; font-size: 12px; }
+      .secondary-button { min-height: 38px; padding: 0 10px; font-size: 11px; }
+      .control-hint, .sound-state { display: none; }
+      .chat-panel {
+        right: auto; bottom: 14px; left: 10px; width: min(360px, calc(100% - 20px)); height: min(47%, 350px);
+      }
+      .chat-feed { padding: 9px 5px 4px 1px; }
+      .chat-line { gap: 6px; margin-bottom: 6px; padding: 5px 8px 5px 6px; }
+      .chat-avatar { width: 18px; height: 18px; flex-basis: 18px; font-size: 10px; }
+      .chat-name, .chat-message { font-size: 11px; }
+      .chat-foot { padding-top: 5px; }
+      .chat-input { height: 34px; font-size: 11px; }
+      .chat-send { height: 34px; width: 35px; flex-basis: 35px; }
+    }
+
+    @media (max-width: 380px) {
+      .brand em { display: none; }
+      .topbar { gap: 8px; }
+      .controlbar { padding-right: 8px; padding-left: 8px; }
+      .primary-button, .end-button { padding: 0 10px; }
+      .secondary-button { padding: 0 8px; }
+      .chat-panel { left: 8px; width: calc(100% - 16px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand" aria-label="Twitch Simulator">
+        <svg class="brand-mark" viewBox="0 0 28 30" fill="none" aria-hidden="true"><path fill="currentColor" d="M3 1h24v17l-7 7h-5l-4 4v-4H4V5l-1-4Z"/><path fill="#18181b" d="M7 5h16v11l-4 4h-5l-3 3v-3H7V5Z"/><path fill="currentColor" d="M12 8h2v7h-2zm6 0h2v7h-2z"/></svg>
+        <span>TWITCH <em>SIM</em></span>
+      </div>
+      <div class="top-divider"></div>
+      <div class="top-title"><strong>Мой первый стрим</strong><span>Личная студия вещания</span></div>
+      <div class="top-live" id="topStatus"><i class="live-dot"></i><span id="topStatusText">НЕ В ЭФИРЕ</span></div>
+    </header>
+
+    <main class="layout" id="layout">
+      <section class="stage-column" aria-label="Трансляция">
+        <div class="stage" id="stage">
+          <video id="cameraVideo" autoplay playsinline muted hidden></video>
+          <div class="empty-state" id="emptyState">
+            <div class="camera-art">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg>
+            </div>
+            <h1>Ваша сцена готова</h1>
+            <p>Включите камеру для предпросмотра или начинайте эфир — зрители уже ждут.</p>
+          </div>
+          <div class="video-shade"></div>
+          <div class="stage-chips">
+            <span class="chip chip-live" id="liveBadge" hidden>● LIVE</span>
+            <span class="chip chip-viewers" id="viewerBadge" hidden>◉ <span id="viewerCount">0</span></span>
+            <span class="chip chip-views" id="viewsBadge" hidden>Просмотры <span id="viewsCount">0</span></span>
+            <span class="chip stage-timer" id="timerBadge" hidden>00:00:00</span>
+          </div>
+          <span class="camera-label" id="cameraLabel" hidden></span>
+          <div class="toast" id="errorToast" role="alert" hidden><strong id="errorTitle"></strong><span id="errorText"></span></div>
+          <aside class="chat-panel" id="chatPanel" aria-label="Комментарии трансляции">
+            <div class="chat-feed" id="chatFeed" aria-live="polite"></div>
+            <form class="chat-foot" id="chatForm">
+              <div class="chat-input-row">
+                <input class="chat-input" id="chatInput" maxlength="160" autocomplete="off" placeholder="Написать комментарий..." aria-label="Комментарий к трансляции">
+                <button class="chat-send" id="chatSend" type="submit" aria-label="Отправить комментарий">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                </button>
+              </div>
+            </form>
+          </aside>
+        </div>
+        <section class="stream-info">
+          <div class="avatar-main" aria-hidden="true">🎮</div>
+          <div class="stream-copy">
+            <strong>Мой первый стрим</strong>
+            <span>Просто общаемся и хорошо проводим время <span class="tag">Общение</span></span>
+          </div>
+          <div class="stream-actions">
+            <button class="icon-button" id="cameraButton" type="button" title="Включить камеру" aria-label="Включить камеру">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg>
+            </button>
+            <button class="icon-button" id="flipButton" type="button" title="Переключить камеру" aria-label="Переключить переднюю или заднюю камеру" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6.5L20 12M4 12l2 5.5A7 7 0 0 0 18.4 15"/></svg>
+            </button>
+            <button class="icon-button" id="fullscreenButton" type="button" title="На весь экран" aria-label="На весь экран">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"/></svg>
+            </button>
+          </div>
+        </section>
+        <footer class="controlbar">
+          <div class="control-left">
+            <button class="primary-button" id="startButton" type="button">
+              <span>▶</span><span>Начать эфир</span>
+            </button>
+            <button class="end-button" id="endButton" type="button"><span>■</span><span>Завершить эфир</span></button>
+            <span class="control-hint" id="controlHint">Камера и микрофон запросят доступ</span>
+          </div>
+          <div class="control-right">
+            <button class="icon-button" id="micButton" type="button" title="Выключить микрофон" aria-label="Выключить микрофон">
+              <svg id="micIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5m-4 0h8"/></svg>
+            </button>
+            <button class="icon-button" id="speechButton" type="button" title="Распознавать речь во время эфира" aria-label="Включить распознавание речи">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M8 7v10m-4-7v4m12-8v12m4-9v6"/></svg>
+            </button>
+            <span class="sound-state" id="micState">Микрофон вкл.</span>
+            <button class="secondary-button" id="flipButtonMobile" type="button" hidden aria-label="Переключить камеру">↻ Камера</button>
+          </div>
+        </footer>
+      </section>
+
+    </main>
+  </div>
+
+  <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const video = $("cameraVideo");
+      const stage = $("stage");
+      const startButton = $("startButton");
+      const endButton = $("endButton");
+      const cameraButton = $("cameraButton");
+      const micButton = $("micButton");
+      const chatFeed = $("chatFeed");
+      const state = {
+        stream: null,
+        live: false,
+        micEnabled: true,
+        facingMode: "user",
+        startedAt: 0,
+        viewers: 0,
+        views: 12486 + Math.floor(Math.random() * 3600),
+        interval: null,
+        chatTimeout: null,
+        speechRecognition: null,
+        speechEnabled: false,
+        speechRestartTimeout: null,
+        birthdayCooldownUntil: 0,
+        questionCooldownUntil: 0,
+        topicCooldowns: Object.create(null),
+        recentBotMessages: [],
+        lastDialogueIndex: -1,
+        lastChatTopic: null,
+        birthdayTimeouts: [],
+        dialogueTimeouts: [],
+        toastTimeout: null,
+        wasNearBottom: true
+      };
+      const personas = [
+        ["LunaPixel", "#d68dff", "✨"], ["M0onCat", "#ff9a75", "🐱"], ["Kaktusik", "#7bd88f", "🌵"],
+        ["neon_fox", "#ff8298", "🦊"], ["sh0gun", "#87b8ff", "⚡"], ["mila_mila", "#ffc857", "🌼"],
+        ["QuietStorm", "#bd9dff", "☁️"], ["vanya_live", "#67d8d4", "🎧"], ["pandaTea", "#e5a2c9", "🐼"],
+        ["pixel_nika", "#ffbd8f", "🍑"], ["frogEnjoyer", "#a9d978", "🐸"], ["NightOwl", "#8eabff", "🌙"]
+      ];
+      const messages = [
+        "привет всем! 👋", "классная атмосфера здесь", "как настроение, чат? 💜", "зашёл поддержать!",
+        "очень уютный стрим ✨", "что сегодня обсуждаем?", "привет из рекомендаций", "чат, вы лучшие",
+        "хорошего вечера всем 🌙", "звук отлично слышно", "кто давно смотрит?", "😊😊😊",
+        "ого, сколько нас уже!", "люблю такие спокойные эфиры", "передаю привет стримеру!", "💜💜💜",
+        "только подключился, что пропустил?", "хорошая тема для разговора", "ура, я успел на эфир"
+      ];
+      const birthdayGreetings = [
+        ["mila_mila", "#ffc857", "🌼", "Макар, с днём рождения! 🎂 Желаю счастья и классного дня!"],
+        ["neon_fox", "#ff8298", "🦊", "С праздником, Макар! Пусть все мечты сбываются 🎉"],
+        ["vanya_live", "#67d8d4", "🎧", "Макар, поздравляю! Отличного настроения и побольше радости 💜"],
+        ["pandaTea", "#e5a2c9", "🐼", "С днём рождения, Макар! Пусть год будет невероятным! 🥳"],
+        ["LunaPixel", "#d68dff", "✨", "Макар, обнимаем всем чатом! Счастья, здоровья и удачи! 🎈"]
+      ];
+      const viewerDialogues = [
+        [
+          ["LunaPixel", "#d68dff", "✨", "тоже только зашла, тут очень уютно 😊"],
+          ["M0onCat", "#ff9a75", "🐱", "да, уже не первый раз здесь! 💜"]
+        ],
+        [
+          ["sh0gun", "#87b8ff", "⚡", "я бы выбрал что-нибудь с открытым миром"],
+          ["pixel_nika", "#ffbd8f", "🍑", "согласна, чтобы можно было просто исследовать!"]
+        ],
+        [
+          ["Kaktusik", "#7bd88f", "🌵", "у меня всё отлично, спасибо что спросил!"],
+          ["vanya_live", "#67d8d4", "🎧", "и у меня хорошее настроение, всем приятного эфира"]
+        ],
+        [
+          ["NightOwl", "#8eabff", "🌙", "вечером такие эфиры особенно хорошо заходят"],
+          ["pandaTea", "#e5a2c9", "🐼", "точно, можно расслабиться после дел ☕"]
+        ]
+      ];
+      const questionReplies = {
+        greeting: [
+          ["mila_mila", "#ffc857", "🌼", "у меня всё хорошо, спасибо! А у тебя? 😊"],
+          ["neon_fox", "#ff8298", "🦊", "отлично, особенно теперь, когда мы все собрались 💜"],
+          ["pandaTea", "#e5a2c9", "🐼", "всё супер! всем хорошего настроения ✨"]
+        ],
+        choice: [
+          ["sh0gun", "#87b8ff", "⚡", "я бы выбрал первый вариант, звучит интересно"],
+          ["pixel_nika", "#ffbd8f", "🍑", "а мне нравится идея со вторым вариантом!"],
+          ["Kaktusik", "#7bd88f", "🌵", "оба варианта классные, сложно выбрать 😄"]
+        ],
+        game: [
+          ["LunaPixel", "#d68dff", "✨", "я люблю игры с хорошим сюжетом и атмосферой"],
+          ["frogEnjoyer", "#a9d978", "🐸", "мне больше нравятся приключения и исследование мира"],
+          ["sh0gun", "#87b8ff", "⚡", "главное, чтобы было во что погрузиться надолго"]
+        ],
+        general: [
+          ["vanya_live", "#67d8d4", "🎧", "хороший вопрос! Сейчас подумаю вместе с тобой 🤔"],
+          ["QuietStorm", "#bd9dff", "☁️", "интересно, что остальные думают об этом?"],
+          ["M0onCat", "#ff9a75", "🐱", "я бы сказал, что тут многое зависит от настроения 😊"]
+        ]
+      };
+      const topicReactions = [
+        {
+          id: "games",
+          pattern: /(?:игр[а-яё]*|поиграть|геймпад|стрелялк[а-яё]*|приключени[а-яё]*|открыт(?:ый|ого|ом)\s+мир)/iu,
+          statements: [
+            ["sh0gun", "#87b8ff", "⚡", "в играх с хорошим сюжетом можно пропасть на весь вечер 😄"],
+            ["frogEnjoyer", "#a9d978", "🐸", "я больше всего люблю исследовать открытый мир"],
+            ["pixel_nika", "#ffbd8f", "🍑", "теперь захотелось тоже во что-нибудь поиграть 🎮"]
+          ],
+          questions: [
+            ["LunaPixel", "#d68dff", "✨", "я за игры с хорошим сюжетом и атмосферой 🎮"],
+            ["frogEnjoyer", "#a9d978", "🐸", "мне нравятся приключения, где можно исследовать мир"],
+            ["sh0gun", "#87b8ff", "⚡", "главное, чтобы было во что погрузиться надолго"]
+          ],
+          dialogue: [
+            [
+              ["sh0gun", "#87b8ff", "⚡", "главное, чтобы мир был интересным и живым"],
+              ["frogEnjoyer", "#a9d978", "🐸", "да! и чтобы можно было находить что-то неожиданное"]
+            ],
+            [
+              ["LunaPixel", "#d68dff", "✨", "сюжет тоже очень важен, тогда сильнее переживаешь за героев"],
+              ["M0onCat", "#ff9a75", "🐱", "точно, любимая игра потом ещё долго не выходит из головы"]
+            ]
+          ]
+        },
+        {
+          id: "music",
+          pattern: /(?:музык[а-яё]*|песн[а-яё]*|мелоди[а-яё]*|трек[а-яё]*|музыкант[а-яё]*)/iu,
+          statements: [
+            ["vanya_live", "#67d8d4", "🎧", "музыка сразу задаёт настроение всему вечеру 🎶"],
+            ["NightOwl", "#8eabff", "🌙", "какую музыку можно слушать бесконечно?"],
+            ["mila_mila", "#ffc857", "🌼", "люблю находить новые песни по советам друзей"]
+          ],
+          questions: [
+            ["vanya_live", "#67d8d4", "🎧", "я слушаю всё по настроению, но чаще что-нибудь спокойное"],
+            ["NightOwl", "#8eabff", "🌙", "посоветуй любимый трек, добавлю в плейлист 🎶"],
+            ["mila_mila", "#ffc857", "🌼", "люблю открывать для себя новые песни"]
+          ],
+          dialogue: [
+            [
+              ["vanya_live", "#67d8d4", "🎧", "я обычно добавляю понравившиеся треки в отдельный плейлист"],
+              ["NightOwl", "#8eabff", "🌙", "классная идея, так потом всегда есть что включить"]
+            ],
+            [
+              ["mila_mila", "#ffc857", "🌼", "иногда одна песня может сделать весь день лучше"],
+              ["LunaPixel", "#d68dff", "✨", "да, особенно если случайно услышала её в нужный момент"]
+            ]
+          ]
+        },
+        {
+          id: "food",
+          pattern: /(?:ед[а-яё]*|вкусн[а-яё]*|готов[а-яё]*|рецепт[а-яё]*|пицц[а-яё]*|кофе|чай|десерт[а-яё]*)/iu,
+          statements: [
+            ["pandaTea", "#e5a2c9", "🐼", "теперь захотелось чего-нибудь вкусного ☕"],
+            ["Kaktusik", "#7bd88f", "🌵", "простая домашняя еда — это всегда уютно"],
+            ["pixel_nika", "#ffbd8f", "🍑", "поделитесь любимым быстрым рецептом!"]
+          ],
+          questions: [
+            ["pandaTea", "#e5a2c9", "🐼", "я бы сейчас выбрала что-нибудь сладкое к чаю ☕"],
+            ["Kaktusik", "#7bd88f", "🌵", "самое вкусное — то, что приготовлено дома"],
+            ["pixel_nika", "#ffbd8f", "🍑", "обожаю простые рецепты, которыми можно поделиться"]
+          ],
+          dialogue: [
+            [
+              ["pandaTea", "#e5a2c9", "🐼", "к чаю я бы выбрала что-нибудь сладкое"],
+              ["mila_mila", "#ffc857", "🌼", "а я за что-нибудь домашнее и только из духовки 😋"]
+            ],
+            [
+              ["Kaktusik", "#7bd88f", "🌵", "любимое блюдо часто совсем несложно приготовить"],
+              ["pixel_nika", "#ffbd8f", "🍑", "зато потом особенно приятно всех угостить"]
+            ]
+          ]
+        },
+        {
+          id: "movies",
+          pattern: /(?:фильм[а-яё]*|кино|сериал[а-яё]*|мультфильм[а-яё]*|акт[её]р[а-яё]*|режисс[её]р[а-яё]*)/iu,
+          statements: [
+            ["QuietStorm", "#bd9dff", "☁️", "хороший фильм потом ещё долго обсуждаешь"],
+            ["M0onCat", "#ff9a75", "🐱", "люблю истории с неожиданной развязкой"],
+            ["LunaPixel", "#d68dff", "✨", "вечер кино звучит как отличный план 🍿"]
+          ],
+          questions: [
+            ["QuietStorm", "#bd9dff", "☁️", "мне нравятся фильмы с хорошо прописанными героями"],
+            ["M0onCat", "#ff9a75", "🐱", "люблю неожиданные развязки, которые не угадаешь заранее"],
+            ["LunaPixel", "#d68dff", "✨", "посоветуй что-нибудь посмотреть, добавлю в список 🍿"]
+          ],
+          dialogue: [
+            [
+              ["QuietStorm", "#bd9dff", "☁️", "я люблю, когда персонажи хорошо прописаны"],
+              ["M0onCat", "#ff9a75", "🐱", "с такими героями даже знакомую историю смотришь заново"]
+            ],
+            [
+              ["LunaPixel", "#d68dff", "✨", "саундтрек тоже может сделать фильм особенным"],
+              ["vanya_live", "#67d8d4", "🎧", "согласен, иногда музыка запоминается даже сильнее сцен"]
+            ]
+          ]
+        },
+        {
+          id: "weather",
+          pattern: /(?:погод[а-яё]*|дожд[а-яё]*|снег[а-яё]*|солнечн[а-яё]*|холод[а-яё]*|жар[а-яё]*|тепл[а-яё]*)/iu,
+          statements: [
+            ["NightOwl", "#8eabff", "🌙", "в такую погоду особенно хорошо смотреть уютный стрим"],
+            ["Kaktusik", "#7bd88f", "🌵", "главное — устроиться поудобнее и взять чай ☕"],
+            ["neon_fox", "#ff8298", "🦊", "надеюсь, у всех там уютно и комфортно 💜"]
+          ],
+          questions: [
+            ["NightOwl", "#8eabff", "🌙", "у нас тут уютно, особенно если смотреть стрим с чаем"],
+            ["Kaktusik", "#7bd88f", "🌵", "я за любую погоду, если дома тепло и спокойно"],
+            ["neon_fox", "#ff8298", "🦊", "пусть у всех будет уютный вечер, несмотря на погоду 💜"]
+          ],
+          dialogue: [
+            [
+              ["NightOwl", "#8eabff", "🌙", "дождь за окном — идеальный фон для спокойного вечера"],
+              ["Kaktusik", "#7bd88f", "🌵", "да, если рядом ещё чай и что-нибудь вкусное ☕"]
+            ],
+            [
+              ["neon_fox", "#ff8298", "🦊", "пусть у всех будет уютный вечер, несмотря на погоду"],
+              ["pandaTea", "#e5a2c9", "🐼", "спасибо, чат как раз добавляет тепла 💜"]
+            ]
+          ]
+        }
+      ];
+
+      function showError(title, message) {
+        $("errorTitle").textContent = title;
+        $("errorText").textContent = message;
+        $("errorToast").hidden = false;
+        clearTimeout(state.toastTimeout);
+        state.toastTimeout = setTimeout(() => { $("errorToast").hidden = true; }, 8500);
+      }
+
+      function hideError() {
+        $("errorToast").hidden = true;
+        clearTimeout(state.toastTimeout);
+      }
+
+      function explainMediaError(error) {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          return "Браузер не поддерживает доступ к камере. Откройте страницу в актуальном браузере через localhost или HTTPS.";
+        }
+        if (error && error.name === "NotAllowedError") return "Доступ запрещён. Разрешите камеру и микрофон в настройках браузера и попробуйте снова.";
+        if (error && error.name === "NotFoundError") return "Не найдена камера или микрофон. Подключите устройство и повторите попытку.";
+        if (error && error.name === "NotReadableError") return "Устройство уже используется другим приложением. Закройте его и попробуйте снова.";
+        if (error && error.name === "OverconstrainedError") return "Выбранная камера недоступна. Попробуйте переключить камеру.";
+        if (error && error.name === "SecurityError") return "Браузер блокирует камеру на этой странице. Используйте HTTPS или localhost.";
+        return "Проверьте подключение устройства и разрешения сайта, затем попробуйте ещё раз.";
+      }
+
+      function attachStream(stream) {
+        state.stream = stream;
+        video.srcObject = stream;
+        video.hidden = false;
+        stage.classList.add("has-video");
+        video.classList.toggle("mirror", state.facingMode === "user");
+        const track = stream.getVideoTracks()[0];
+        $("cameraLabel").hidden = !track;
+        $("cameraLabel").textContent = state.facingMode === "user" ? "Передняя камера" : "Задняя камера";
+        updateCameraButton();
+        updateMicButton();
+        updateFlipButtons();
+        video.play().catch(() => {});
+      }
+
+      function updateCameraButton() {
+        const enabled = Boolean(state.stream && state.stream.getVideoTracks().some((track) => track.readyState === "live" && track.enabled));
+        cameraButton.classList.toggle("active", enabled);
+        cameraButton.title = enabled ? "Выключить камеру" : "Включить камеру";
+        cameraButton.setAttribute("aria-label", cameraButton.title);
+        $("cameraLabel").hidden = !enabled;
+        if (enabled) {
+          video.hidden = false;
+          stage.classList.add("has-video");
+        } else {
+          video.hidden = true;
+          stage.classList.remove("has-video");
+        }
+      }
+
+      function updateMicButton() {
+        micButton.classList.toggle("active", !state.micEnabled);
+        micButton.title = state.micEnabled ? "Выключить микрофон" : "Включить микрофон";
+        micButton.setAttribute("aria-label", micButton.title);
+        $("micState").textContent = state.micEnabled ? "Микрофон вкл." : "Микрофон выкл.";
+        $("micIcon").innerHTML = state.micEnabled
+          ? '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5m-4 0h8"/>'
+          : '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5m-4 0h8M3 3l18 18"/>';
+        if (state.stream) state.stream.getAudioTracks().forEach((track) => { track.enabled = state.micEnabled; });
+      }
+
+      function setSpeechButton(active) {
+        const button = $("speechButton");
+        button.classList.toggle("active", active);
+        button.title = active ? "Выключить распознавание речи" : "Включить распознавание речи";
+        button.setAttribute("aria-label", button.title);
+      }
+
+      function stopSpeechRecognition() {
+        clearTimeout(state.speechRestartTimeout);
+        state.speechRestartTimeout = null;
+        state.speechEnabled = false;
+        const recognition = state.speechRecognition;
+        state.speechRecognition = null;
+        if (recognition) {
+          recognition.onend = null;
+          recognition.abort();
+        }
+        setSpeechButton(false);
+      }
+
+      function startSpeechRecognition() {
+        if (!state.live || !state.micEnabled || state.speechEnabled) return;
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+          showError("Распознавание речи недоступно", "Используйте браузер с поддержкой Web Speech API, например актуальный Chrome. Функция может требовать интернет-соединение.");
+          return;
+        }
+        const recognition = new SpeechRecognition();
+        recognition.lang = "ru-RU";
+        recognition.continuous = true;
+        recognition.interimResults = false;
+        state.speechRecognition = recognition;
+        state.speechEnabled = true;
+        setSpeechButton(true);
+        recognition.onresult = (event) => {
+          for (let index = event.resultIndex; index < event.results.length; index += 1) {
+            const result = event.results[index];
+            if (result.isFinal) handleRecognizedSpeech(result[0].transcript);
+          }
+        };
+        recognition.onerror = (event) => {
+          if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+            stopSpeechRecognition();
+            showError("Нет доступа к распознаванию речи", "Разрешите использование микрофона для распознавания речи в браузере и нажмите кнопку распознавания ещё раз.");
+          } else if (event.error === "network") {
+            showError("Распознавание речи приостановлено", "Сервис распознавания браузера недоступен. Проверьте интернет-соединение.");
+          }
+        };
+        recognition.onend = () => {
+          if (state.speechRecognition !== recognition || !state.live || !state.speechEnabled) return;
+          state.speechRestartTimeout = setTimeout(() => {
+            if (state.speechRecognition !== recognition || !state.live || !state.speechEnabled) return;
+            try {
+              recognition.start();
+            } catch (error) {
+              stopSpeechRecognition();
+              showError("Не удалось продолжить распознавание", "Нажмите кнопку распознавания речи, чтобы запустить его снова.");
+            }
+          }, 400);
+        };
+        try {
+          recognition.start();
+          hideError();
+        } catch (error) {
+          stopSpeechRecognition();
+          showError("Не удалось включить распознавание", "Проверьте разрешение на микрофон и попробуйте ещё раз.");
+        }
+      }
+
+      function isBirthdayTrigger(transcript) {
+        const normalized = transcript.toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
+        return /(?:день\s+рождени[ея]|день\s+рожденья|с\s+днем\s+рождения|днюх[аеи]|(?:^|[^\p{L}\p{N}])др(?:$|[^\p{L}\p{N}]))/u.test(normalized);
+      }
+
+      function startBirthdayGreetings() {
+        if (!state.live || Date.now() < state.birthdayCooldownUntil) return;
+        state.birthdayCooldownUntil = Date.now() + 90000;
+        birthdayGreetings.forEach(([name, color, avatar, text], index) => {
+          const timeout = setTimeout(() => {
+            if (state.live) addChatMessage(name, color, avatar, text);
+          }, 400 + index * (1250 + Math.random() * 700));
+          state.birthdayTimeouts.push(timeout);
+        });
+      }
+
+      function isQuestionTrigger(transcript) {
+        const normalized = transcript.toLocaleLowerCase("ru-RU").replace(/ё/g, "е").trim();
+        if (/[?؟]/u.test(normalized)) return true;
+        return /(?:^|[^\p{L}\p{N}])(?:как|где|куда|откуда|когда|почему|зачем|кто|что|чем|чего|кому|какой|какая|какое|какие|сколько|нравится|любишь|любите|думаешь|думаете|считаешь|считаете|можешь|можете|будешь|будете|хочешь|хотите|помнишь|знаешь|расскажи|посоветуйте|посоветуешь)(?:$|[^\p{L}\p{N}])/u.test(normalized);
+      }
+
+      function getQuestionReplies(transcript) {
+        const normalized = transcript.toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
+        if (/(?:^|[^\p{L}\p{N}])как\s+(?:дела|настроение|вы|ты)(?:$|[^\p{L}\p{N}])/u.test(normalized)) return questionReplies.greeting;
+        if (/(?:^|[^\p{L}\p{N}])(?:игра|игры|игру|игре|игрой|играм|играми|играх|играть|поиграть|во\s+что)(?:$|[^\p{L}\p{N}])/u.test(normalized)) return questionReplies.game;
+        if (/(?:^|[^\p{L}\p{N}])(?:или|выбрать|выбираете|предпочитаете)(?:$|[^\p{L}\p{N}])|(?:^|[^\p{L}\p{N}])какой\s+вариант(?:$|[^\p{L}\p{N}])/u.test(normalized)) return questionReplies.choice;
+        return questionReplies.general;
+      }
+
+      function findTopic(text) {
+        return topicReactions.find((topic) => topic.pattern.test(text)) || null;
+      }
+
+      function chooseDialogue(dialogues) {
+        if (!dialogues || dialogues.length === 0) return null;
+        let index = Math.floor(Math.random() * dialogues.length);
+        if (dialogues.length > 1 && index === state.lastDialogueIndex) index = (index + 1) % dialogues.length;
+        state.lastDialogueIndex = index;
+        return dialogues[index];
+      }
+
+      function getConversationForContext() {
+        const topic = state.lastChatTopic && state.lastChatTopic.expiresAt > Date.now()
+          ? findTopic(state.lastChatTopic.text)
+          : null;
+        return chooseDialogue(topic?.dialogue || viewerDialogues);
+      }
+
+      function scheduleViewerDialogue(dialogue, delay = 1100) {
+        if (!dialogue) return;
+        dialogue.forEach(([name, color, avatar, text], index) => {
+          const timeout = setTimeout(() => {
+            if (state.live) addChatMessage(name, color, avatar, text);
+          }, delay + index * (1350 + Math.random() * 650));
+          state.dialogueTimeouts.push(timeout);
+        });
+      }
+
+      function handleRecognizedSpeech(transcript) {
+        if (!state.live || !transcript.trim()) return;
+        if (isBirthdayTrigger(transcript)) {
+          startBirthdayGreetings();
+          return;
+        }
+        if (transcript.trim().length < 8) return;
+        if (isQuestionTrigger(transcript)) {
+          const canScheduleQuestionReply = Date.now() >= state.questionCooldownUntil;
+          if (canScheduleQuestionReply) {
+            state.questionCooldownUntil = Date.now() + 25000;
+            const topic = findTopic(transcript);
+            scheduleViewerDialogue(topic?.questions || getQuestionReplies(transcript), 500);
+            scheduleViewerDialogue(
+              chooseDialogue(topic?.dialogue || viewerDialogues),
+              5000 + Math.random() * 1000
+            );
+          }
+          return;
+        }
+        const topic = findTopic(transcript);
+        if (!topic || Date.now() < (state.topicCooldowns[topic.id] || 0)) return;
+        state.topicCooldowns[topic.id] = Date.now() + 35000;
+        scheduleViewerDialogue(topic.statements, 650);
+        if (Math.random() < 0.5) {
+          scheduleViewerDialogue(chooseDialogue(topic.dialogue), 4000 + Math.random() * 1200);
+        }
+      }
+
+      function updateFlipButtons() {
+        const canFlip = Boolean(state.stream && state.stream.getVideoTracks().length);
+        $("flipButton").hidden = !canFlip || window.matchMedia("(max-width: 760px)").matches;
+        $("flipButtonMobile").hidden = !canFlip || !window.matchMedia("(max-width: 760px)").matches;
+      }
+
+      async function acquireCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error("Браузер не поддерживает камеру");
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: state.facingMode } },
+          audio: state.micEnabled
+        });
+        hideError();
+        attachStream(stream);
+      }
+
+      async function enableCamera() {
+        if (state.stream && state.stream.getVideoTracks().some((track) => track.readyState === "live")) {
+          state.stream.getVideoTracks().forEach((track) => { track.enabled = false; track.stop(); });
+          state.stream.removeTrack(state.stream.getVideoTracks()[0]);
+          updateCameraButton();
+          updateFlipButtons();
+          return;
+        }
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: state.facingMode } },
+            audio: false
+          });
+          if (state.stream) {
+            state.stream.getVideoTracks().forEach((track) => { state.stream.removeTrack(track); track.stop(); });
+            stream.getVideoTracks().forEach((track) => state.stream.addTrack(track));
+            stream.getTracks().filter((track) => track.kind !== "video").forEach((track) => track.stop());
+            video.srcObject = state.stream;
+            updateCameraButton();
+            updateFlipButtons();
+            video.play().catch(() => {});
+          } else {
+            attachStream(stream);
+          }
+          hideError();
+        } catch (error) {
+          showError("Не удалось включить камеру", explainMediaError(error));
+        }
+      }
+
+      async function flipCamera() {
+        if (!state.stream || !state.stream.getVideoTracks().length) return;
+        const nextMode = state.facingMode === "user" ? "environment" : "user";
+        try {
+          const newStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { exact: nextMode } },
+            audio: false
+          });
+          const newTrack = newStream.getVideoTracks()[0];
+          const oldTracks = state.stream.getVideoTracks();
+          oldTracks.forEach((track) => { state.stream.removeTrack(track); track.stop(); });
+          state.stream.addTrack(newTrack);
+          newStream.getTracks().filter((track) => track !== newTrack).forEach((track) => track.stop());
+          state.facingMode = nextMode;
+          video.srcObject = state.stream;
+          video.classList.toggle("mirror", state.facingMode === "user");
+          $("cameraLabel").textContent = state.facingMode === "user" ? "Передняя камера" : "Задняя камера";
+          hideError();
+          updateFlipButtons();
+          video.play().catch(() => {});
+        } catch (error) {
+          showError("Не удалось переключить камеру", explainMediaError(error));
+        }
+      }
+
+      async function enableMicTrack() {
+        if (!state.live || !state.micEnabled || (state.stream && state.stream.getAudioTracks().length)) return;
+        try {
+          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          const audioTrack = audioStream.getAudioTracks()[0];
+          if (!state.live) { audioTrack.stop(); return; }
+          if (!state.stream) state.stream = new MediaStream();
+          state.stream.addTrack(audioTrack);
+          hideError();
+        } catch (error) {
+          state.micEnabled = false;
+          updateMicButton();
+          showError("Не удалось включить микрофон", explainMediaError(error));
+        }
+      }
+
+      function setLiveInterface(isLive) {
+        state.live = isLive;
+        startButton.style.display = isLive ? "none" : "inline-flex";
+        endButton.style.display = isLive ? "inline-flex" : "none";
+        $("topStatus").classList.toggle("is-live", isLive);
+        $("topStatusText").textContent = isLive ? "В ЭФИРЕ" : "НЕ В ЭФИРЕ";
+        $("liveBadge").hidden = !isLive;
+        $("viewerBadge").hidden = !isLive;
+        $("viewsBadge").hidden = !isLive;
+        $("timerBadge").hidden = !isLive;
+        $("controlHint").textContent = isLive ? "Эфир идёт · чат симулируется" : "Камера и микрофон запросят доступ";
+        $("chatInput").disabled = !isLive;
+        $("chatSend").disabled = !isLive;
+        if (!isLive) $("cameraLabel").hidden = true;
+      }
+
+      function formatDuration(seconds) {
+        const h = String(Math.floor(seconds / 3600)).padStart(2, "0");
+        const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
+        const s = String(seconds % 60).padStart(2, "0");
+        return `${h}:${m}:${s}`;
+      }
+
+      function renderCounters() {
+        $("viewerCount").textContent = state.viewers.toLocaleString("ru-RU");
+        $("viewsCount").textContent = new Intl.NumberFormat("ru-RU", { notation: "compact", maximumFractionDigits: 1 }).format(state.views);
+        $("timerBadge").textContent = formatDuration(Math.floor((Date.now() - state.startedAt) / 1000));
+      }
+
+      function addChatMessage(name, color, avatar, text, own = false) {
+        const normalized = text.toLocaleLowerCase("ru-RU").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+        if (!normalized || state.recentBotMessages.includes(normalized)) return;
+        state.recentBotMessages.push(normalized);
+        if (state.recentBotMessages.length > 24) state.recentBotMessages.shift();
+        if (!own) state.lastChatTopic = { text, expiresAt: Date.now() + 60000 };
+        const line = document.createElement("div");
+        line.className = "chat-line";
+        const face = document.createElement("span");
+        face.className = "chat-avatar";
+        face.style.background = `${color}35`;
+        face.textContent = avatar;
+        const user = document.createElement("span");
+        user.className = "chat-name";
+        user.style.color = color;
+        user.textContent = name;
+        const message = document.createElement("span");
+        message.className = "chat-message";
+        message.textContent = text;
+        if (own) user.textContent += " (вы)";
+        line.append(face, user, message);
+        chatFeed.append(line);
+        while (chatFeed.querySelectorAll(".chat-line").length > 70) {
+          chatFeed.querySelector(".chat-line").remove();
+        }
+        if (state.wasNearBottom) chatFeed.scrollTop = chatFeed.scrollHeight;
+      }
+
+      function scheduleChat() {
+        if (!state.live) return;
+        const delay = 2600 + Math.random() * 5300;
+        state.chatTimeout = setTimeout(() => {
+          if (!state.live) return;
+          const [name, color, avatar] = personas[Math.floor(Math.random() * personas.length)];
+          const message = messages[Math.floor(Math.random() * messages.length)];
+          addChatMessage(name, color, avatar, message);
+          if (Math.random() < 0.22) {
+            scheduleViewerDialogue(getConversationForContext(), 1700);
+          }
+          scheduleChat();
+        }, delay);
+      }
+
+      async function startStream() {
+        startButton.disabled = true;
+        startButton.innerHTML = "<span>…</span><span>Подключение</span>";
+        try {
+          if (!state.stream || !state.stream.getVideoTracks().some((track) => track.readyState === "live")) {
+            await acquireCamera();
+          } else if (state.micEnabled && !state.stream.getAudioTracks().length) {
+            const audio = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            audio.getTracks().forEach((track) => state.stream.addTrack(track));
+          }
+          state.startedAt = Date.now();
+          state.birthdayCooldownUntil = 0;
+          state.questionCooldownUntil = 0;
+          state.topicCooldowns = Object.create(null);
+          state.birthdayTimeouts = [];
+          state.dialogueTimeouts = [];
+          state.recentBotMessages = [];
+          state.lastChatTopic = null;
+          state.lastDialogueIndex = -1;
+          state.viewers = 8 + Math.floor(Math.random() * 24);
+          state.views = Math.floor(Math.random() * 8);
+          setLiveInterface(true);
+          renderCounters();
+          state.interval = setInterval(() => {
+            if (!state.live) return;
+            const burst = Math.random() < 0.07 ? 8 + Math.floor(Math.random() * 28) : 0;
+            state.viewers = Math.max(1, state.viewers + Math.floor(Math.random() * 11) - 5 + burst);
+            state.views += Math.max(1, Math.floor(state.viewers * (0.035 + Math.random() * 0.045)));
+            renderCounters();
+          }, 1800);
+          scheduleChat();
+          hideError();
+          startSpeechRecognition();
+          chatFeed.scrollTop = chatFeed.scrollHeight;
+        } catch (error) {
+          showError("Не удалось начать эфир", explainMediaError(error));
+        } finally {
+          startButton.disabled = false;
+          startButton.innerHTML = "<span>▶</span><span>Начать эфир</span>";
+        }
+      }
+
+      function stopStream() {
+        if (!state.live && !state.stream) return;
+        state.live = false;
+        clearInterval(state.interval);
+        clearTimeout(state.chatTimeout);
+        clearTimeout(state.toastTimeout);
+        stopSpeechRecognition();
+        state.birthdayTimeouts.forEach(clearTimeout);
+        state.birthdayTimeouts = [];
+        state.dialogueTimeouts.forEach(clearTimeout);
+        state.dialogueTimeouts = [];
+        state.interval = null;
+        state.chatTimeout = null;
+        state.stream?.getTracks().forEach((track) => track.stop());
+        state.stream = null;
+        video.pause();
+        video.srcObject = null;
+        video.hidden = true;
+        video.classList.remove("mirror");
+        stage.classList.remove("has-video");
+        $("cameraLabel").hidden = true;
+        $("flipButton").hidden = true;
+        $("flipButtonMobile").hidden = true;
+        state.viewers = 0;
+        setLiveInterface(false);
+        updateCameraButton();
+        updateMicButton();
+        $("cameraButton").classList.remove("active");
+        $("cameraButton").title = "Включить камеру";
+        $("cameraButton").setAttribute("aria-label", "Включить камеру");
+        $("viewerCount").textContent = "0";
+        $("timerBadge").textContent = "00:00:00";
+        $("chatInput").value = "";
+        hideError();
+        const message = document.createElement("div");
+        message.className = "system-message";
+        message.textContent = "Эфир завершён · камера и микрофон отключены";
+        chatFeed.append(message);
+        chatFeed.scrollTop = chatFeed.scrollHeight;
+      }
+
+      cameraButton.addEventListener("click", enableCamera);
+      micButton.addEventListener("click", async () => {
+        state.micEnabled = !state.micEnabled;
+        updateMicButton();
+        if (state.micEnabled) {
+          await enableMicTrack();
+          startSpeechRecognition();
+        } else {
+          stopSpeechRecognition();
+        }
+      });
+      $("speechButton").addEventListener("click", () => {
+        if (state.speechEnabled) stopSpeechRecognition();
+        else startSpeechRecognition();
+      });
+      $("flipButton").addEventListener("click", flipCamera);
+      $("flipButtonMobile").addEventListener("click", flipCamera);
+      startButton.addEventListener("click", startStream);
+      endButton.addEventListener("click", stopStream);
+      $("fullscreenButton").addEventListener("click", async () => {
+        try {
+          if (!document.fullscreenElement) await $("stage").requestFullscreen();
+          else await document.exitFullscreen();
+        } catch {
+          showError("Полный экран недоступен", "Ваш браузер не разрешил перейти в полноэкранный режим.");
+        }
+      });
+      chatFeed.addEventListener("scroll", () => {
+        state.wasNearBottom = chatFeed.scrollHeight - chatFeed.scrollTop - chatFeed.clientHeight < 60;
+      });
+      $("chatForm").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const text = $("chatInput").value.trim();
+        if (!text || !state.live) return;
+        addChatMessage("Вы", "#bf94ff", "💜", text, false);
+        if (isBirthdayTrigger(text)) startBirthdayGreetings();
+        $("chatInput").value = "";
+        state.wasNearBottom = true;
+        chatFeed.scrollTop = chatFeed.scrollHeight;
+      });
+      window.addEventListener("resize", updateFlipButtons);
+      window.addEventListener("pagehide", () => {
+        clearInterval(state.interval);
+        clearTimeout(state.chatTimeout);
+        clearTimeout(state.speechRestartTimeout);
+        state.speechRecognition?.abort();
+        state.birthdayTimeouts.forEach(clearTimeout);
+        state.dialogueTimeouts.forEach(clearTimeout);
+        state.stream?.getTracks().forEach((track) => track.stop());
+      });
+      setLiveInterface(false);
+    })();
+  </script>
+</body>
+</html>
