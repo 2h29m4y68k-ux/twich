@@ -59,6 +59,15 @@
     }
     #cameraVideo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #09090b; }
     #cameraVideo.mirror { transform: scaleX(-1); }
+    #guestVideo {
+      position: absolute; inset: 0 0 0 auto; z-index: 1; width: 50%; height: 100%;
+      object-fit: cover; background: #09090b; border-left: 2px solid #ffffff30;
+    }
+    .stage.has-guest #cameraVideo { inset: 0 auto 0 0; width: 50%; object-fit: cover; }
+    .guest-label {
+      position: absolute; right: 14px; bottom: 14px; z-index: 2; padding: 6px 9px;
+      border-radius: 6px; background: #111114b8; color: #eee; font-size: 11px;
+    }
     .empty-state { position: relative; z-index: 1; width: min(430px, 90%); text-align: center; pointer-events: none; }
     .camera-art {
       width: 82px; height: 82px; margin: 0 auto 22px; display: grid; place-items: center;
@@ -76,6 +85,7 @@
     .chip-viewers { font-variant-numeric: tabular-nums; }
     .stage-timer { margin-left: auto; font-variant-numeric: tabular-nums; }
     .camera-label { position: absolute; right: 20px; bottom: 18px; z-index: 2; padding: 7px 10px; border-radius: 6px; background: #111114b8; color: #eee; font-size: 11px; }
+    .stage.has-guest .camera-label { right: auto; left: 14px; }
 
     .stream-info {
       min-height: 80px; flex: 0 0 auto; display: flex; align-items: center; gap: 15px;
@@ -159,6 +169,19 @@
     }
     .toast[hidden] { display: none; }
     .toast strong { display: block; margin-bottom: 2px; }
+    .guest-dialog {
+      width: min(430px, calc(100% - 28px)); padding: 22px; border: 1px solid #45404f;
+      border-radius: 16px; background: #18181b; color: var(--text); box-shadow: 0 24px 90px #000b;
+    }
+    .guest-dialog::backdrop { background: #000a; backdrop-filter: blur(5px); }
+    .guest-dialog h2 { margin: 0 0 8px; font-size: 19px; }
+    .guest-dialog p { margin: 0 0 15px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .guest-dialog-status { min-height: 20px; margin: 9px 0 13px; color: #d8c2ff; font-size: 12px; line-height: 1.45; }
+    .guest-link-row { display: flex; gap: 8px; }
+    .guest-link-input { flex: 1; min-width: 0; height: 40px; padding: 0 10px; border: 1px solid #414148; border-radius: 8px; background: #101013; color: var(--text); font: inherit; font-size: 12px; }
+    .guest-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 15px; }
+    .guest-dialog-help { margin-top: 14px !important; font-size: 11px !important; }
+    .guest-dialog-help a { color: var(--purple-light); }
     @media (max-width: 760px) {
       .app { height: 100dvh; min-height: 0; }
       .topbar { height: 50px; flex-basis: 50px; gap: 12px; padding: 0 14px; }
@@ -177,16 +200,22 @@
       .empty-state h1 { font-size: 21px; }
       .empty-state p { font-size: 12px; }
       .camera-label { right: 12px; bottom: 12px; font-size: 10px; }
+      .stage.has-guest .camera-label { right: auto; bottom: calc(50% + 9px); left: 10px; }
+      .stage.has-guest .guest-label { right: 10px; bottom: 9px; }
       .stream-info { min-height: 63px; padding: 9px 13px; gap: 10px; }
       .avatar-main { width: 36px; height: 36px; flex-basis: 36px; font-size: 18px; }
       .stream-copy strong { font-size: 12px; }
       .stream-copy span { font-size: 10px; }
       .stream-actions { gap: 6px; }
       .icon-button { width: 34px; height: 34px; border-radius: 8px; }
-      .controlbar { height: 62px; flex-basis: 62px; padding: 0 12px max(0px, env(safe-area-inset-bottom)); gap: 7px; }
-      .control-left, .control-right { gap: 6px; }
+      .controlbar { height: auto; min-height: 92px; flex-basis: auto; flex-wrap: wrap; align-content: center; justify-content: center; padding: 7px 8px max(7px, env(safe-area-inset-bottom)); gap: 5px; }
+      .control-left, .control-right { width: 100%; justify-content: center; gap: 6px; }
+      .control-left { flex-wrap: wrap; }
       .primary-button, .end-button { min-width: 0; min-height: 39px; padding: 0 13px; font-size: 12px; }
       .secondary-button { min-height: 38px; padding: 0 10px; font-size: 11px; }
+      #guestVideo { inset: auto 0 0; width: 100%; height: 50%; border-top: 2px solid #ffffff30; border-left: 0; }
+      .stage.has-guest #cameraVideo { inset: 0 0 auto; width: 100%; height: 50%; }
+      .guest-label { right: 10px; bottom: calc(50% + 9px); font-size: 10px; }
       .control-hint, .sound-state { display: none; }
       .chat-panel {
         right: auto; bottom: 14px; left: 10px; width: min(360px, calc(100% - 20px)); height: min(47%, 350px);
@@ -226,6 +255,7 @@
       <section class="stage-column" aria-label="Трансляция">
         <div class="stage" id="stage">
           <video id="cameraVideo" autoplay playsinline muted hidden></video>
+          <video id="guestVideo" autoplay playsinline hidden></video>
           <div class="empty-state" id="emptyState">
             <div class="camera-art">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg>
@@ -241,6 +271,7 @@
             <span class="chip stage-timer" id="timerBadge" hidden>00:00:00</span>
           </div>
           <span class="camera-label" id="cameraLabel" hidden></span>
+          <span class="guest-label" id="guestLabel" hidden></span>
           <div class="toast" id="errorToast" role="alert" hidden><strong id="errorTitle"></strong><span id="errorText"></span></div>
           <aside class="chat-panel" id="chatPanel" aria-label="Комментарии трансляции">
             <div class="chat-feed" id="chatFeed" aria-live="polite"></div>
@@ -283,6 +314,7 @@
             <button class="end-button" id="endButton" type="button"><span>■</span><span>Завершить эфир</span></button>
             <button class="secondary-button record-button" id="recordButton" type="button" title="Записать MP4-видео для QuickTime Player">⏺ Запись MP4</button>
             <span class="record-state" id="recordStatus" hidden>ЗАПИСЬ · 00:00</span>
+            <button class="secondary-button" id="guestButton" type="button" title="Подключить второго стримера по ссылке">♧ Гость</button>
             <span class="control-hint" id="controlHint">Камера и микрофон запросят доступ</span>
           </div>
           <div class="control-right">
@@ -301,9 +333,43 @@
     </main>
   </div>
 
+  <dialog class="guest-dialog" id="guestDialog" aria-labelledby="guestDialogTitle">
+    <h2 id="guestDialogTitle">Второй стример</h2>
+    <p id="guestDialogDescription">Подключите второго участника по защищённому WebRTC-соединению.</p>
+    <div id="guestHostPanel" hidden>
+      <div class="guest-dialog-status" id="guestRoomStatus" aria-live="polite"></div>
+      <div class="guest-link-row">
+        <input class="guest-link-input" id="guestInviteLink" readonly aria-label="Ссылка-приглашение">
+        <button class="secondary-button" id="copyGuestLink" type="button">Копировать</button>
+      </div>
+      <div class="guest-dialog-actions">
+        <button class="secondary-button" id="stopGuestRoom" type="button">Завершить подключение</button>
+        <button class="secondary-button" id="closeGuestDialog" type="button">Закрыть</button>
+      </div>
+    </div>
+    <div id="guestJoinPanel" hidden>
+      <div class="guest-dialog-status" id="guestJoinStatus" aria-live="polite">Разрешите Safari доступ к камере и микрофону, чтобы подключиться.</div>
+      <div class="guest-dialog-actions">
+        <button class="secondary-button" id="cancelGuestJoin" type="button">Отмена</button>
+        <button class="primary-button" id="joinGuestRoom" type="button">Подключиться</button>
+      </div>
+    </div>
+    <p class="guest-dialog-help" id="guestSetupHelp" hidden>Сначала настрой Firebase по инструкции в <a href="./README.md" target="_blank" rel="noopener">README</a>. Соединение P2P может требовать TURN-сервер в некоторых сетях.</p>
+  </dialog>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
   <script>
     (() => {
       const $ = (id) => document.getElementById(id);
+      const FIREBASE_CONFIG = {
+        apiKey: "PASTE_FIREBASE_WEB_API_KEY",
+        authDomain: "YOUR_FIREBASE_PROJECT_ID.firebaseapp.com",
+        databaseURL: "https://YOUR_FIREBASE_DATABASE_URL",
+        projectId: "YOUR_FIREBASE_PROJECT_ID",
+        appId: "YOUR_FIREBASE_APP_ID"
+      };
       const video = $("cameraVideo");
       const stage = $("stage");
       const startButton = $("startButton");
@@ -340,7 +406,24 @@
         birthdayTimeouts: [],
         dialogueTimeouts: [],
         toastTimeout: null,
-        wasNearBottom: true
+        wasNearBottom: true,
+        roomRole: null,
+        roomId: null,
+        roomRef: null,
+        guestUidRef: null,
+        guestUid: null,
+        peerConnection: null,
+        peerSenders: Object.create(null),
+        firebaseDb: null,
+        firebaseAuth: null,
+        signalingUnsubs: [],
+        roomUnsubs: [],
+        pendingIceCandidates: [],
+        remoteStream: null,
+        inviteLink: "",
+        joinRoomId: new URLSearchParams(location.search).get("join"),
+        peerDisconnectTimer: null,
+        creatingGuestRoom: false
       };
       const personas = [
         ["LunaPixel", "#d68dff", "✨"], ["M0onCat", "#ff9a75", "🐱"], ["Kaktusik", "#7bd88f", "🌵"],
@@ -563,6 +646,7 @@
         updateMicButton();
         updateFlipButtons();
         video.play().catch(() => {});
+        updatePeerSenders();
       }
 
       function hasActiveScreenShare() {
@@ -587,7 +671,7 @@
           stage.classList.add("has-video");
         } else {
           video.hidden = true;
-          stage.classList.remove("has-video");
+          stage.classList.toggle("has-video", Boolean(state.remoteStream));
         }
       }
 
@@ -612,10 +696,11 @@
           video.pause();
           video.srcObject = null;
           video.hidden = true;
-          stage.classList.remove("has-video");
+          stage.classList.toggle("has-video", Boolean(state.remoteStream));
         }
         updateScreenButton();
         updateCameraButton();
+        updatePeerSenders();
       }
 
       async function toggleScreenShare() {
@@ -638,6 +723,7 @@
             return;
           }
           state.screenStream = screenStream;
+          screenStream.getAudioTracks().forEach((track) => { track.enabled = state.micEnabled; });
           screenTrack.addEventListener("ended", () => {
             if (state.screenStream === screenStream) stopScreenShare(false);
           }, { once: true });
@@ -650,6 +736,7 @@
           updateScreenButton();
           hideError();
           video.play().catch(() => {});
+          updatePeerSenders();
         } catch (error) {
           if (error.name === "NotAllowedError") return;
           if (error.name === "NotFoundError") {
@@ -679,6 +766,432 @@
         if (!isRecording()) return false;
         showError("Сначала останови запись", "Останови и сохрани текущий MP4, затем выбери камеру или демонстрацию экрана и начни новую запись.");
         return true;
+      }
+
+      function isFirebaseConfigured() {
+        return Boolean(
+          window.firebase &&
+          FIREBASE_CONFIG.apiKey &&
+          FIREBASE_CONFIG.apiKey !== "PASTE_FIREBASE_WEB_API_KEY" &&
+          FIREBASE_CONFIG.authDomain &&
+          !FIREBASE_CONFIG.authDomain.includes("YOUR_") &&
+          FIREBASE_CONFIG.databaseURL &&
+          !FIREBASE_CONFIG.databaseURL.includes("YOUR_") &&
+          FIREBASE_CONFIG.projectId !== "YOUR_FIREBASE_PROJECT_ID" &&
+          FIREBASE_CONFIG.databaseURL.startsWith("https://") &&
+          FIREBASE_CONFIG.appId !== "YOUR_FIREBASE_APP_ID"
+        );
+      }
+
+      function openGuestDialog() {
+        const dialog = $("guestDialog");
+        if (!dialog.open) dialog.showModal();
+      }
+
+      function setGuestStatus(message, panel = state.roomRole === "guest" ? "guestJoinStatus" : "guestRoomStatus") {
+        $(panel).textContent = message;
+      }
+
+      function firebaseServices() {
+        if (!window.firebase) throw new Error("Не загрузилась библиотека Firebase. Проверь подключение к интернету и обнови страницу.");
+        if (!isFirebaseConfigured()) {
+          $("guestSetupHelp").hidden = false;
+          if (!state.joinRoomId) {
+            $("guestHostPanel").hidden = false;
+            $("guestRoomStatus").textContent = "Подключение пока не настроено: добавь параметры Firebase из инструкции в README.";
+          }
+          throw new Error("Сначала настрой Firebase по инструкции в README.");
+        }
+        if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+        state.firebaseAuth = firebase.auth();
+        state.firebaseDb = firebase.database();
+        return { auth: state.firebaseAuth, db: state.firebaseDb };
+      }
+
+      async function firebaseUser() {
+        const { auth } = firebaseServices();
+        if (auth.currentUser) return auth.currentUser;
+        const result = await auth.signInAnonymously();
+        return result.user;
+      }
+
+      function watchSignal(ref, eventName, callback, scope = "peer") {
+        ref.on(eventName, callback, (error) => {
+          showError("Ошибка сетевого подключения", error.message || "Firebase не смог получить данные комнаты.");
+        });
+        const unsubs = scope === "room" ? state.roomUnsubs : state.signalingUnsubs;
+        unsubs.push(() => ref.off(eventName, callback));
+      }
+
+      function makeInviteLink(roomId) {
+        const link = new URL(location.href);
+        link.searchParams.set("join", roomId);
+        link.hash = "";
+        return link.toString();
+      }
+
+      function createRoomId() {
+        const bytes = new Uint8Array(18);
+        crypto.getRandomValues(bytes);
+        return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+      }
+
+      function getOutboundVideoTrack() {
+        return state.screenStream?.getVideoTracks().find((track) => track.readyState === "live") ||
+          state.stream?.getVideoTracks().find((track) => track.readyState === "live" && track.enabled) || null;
+      }
+
+      function getOutboundAudioTrack() {
+        return state.stream?.getAudioTracks().find((track) => track.readyState === "live") ||
+          state.screenStream?.getAudioTracks().find((track) => track.readyState === "live") || null;
+      }
+
+      async function updatePeerSenders() {
+        const pc = state.peerConnection;
+        if (!pc) return;
+        for (const kind of ["video", "audio"]) {
+          const sender = state.peerSenders[kind];
+          if (!sender) continue;
+          let track;
+          if (state.roomRole === "host") {
+            track = kind === "video" ? getOutboundVideoTrack() : getOutboundAudioTrack();
+          } else {
+            track = kind === "video"
+              ? getOutboundVideoTrack()
+              : state.stream?.getAudioTracks().find((item) => item.readyState === "live") || null;
+          }
+          if (sender.track !== track) {
+            try {
+              await sender.replaceTrack(track);
+            } catch (error) {
+              showError("Не удалось обновить видео гостя", error.message || "Останови подключение гостя и создай новую ссылку.");
+            }
+          }
+        }
+      }
+
+      async function addRemoteIceCandidate(candidate) {
+        const pc = state.peerConnection;
+        if (!pc) return;
+        if (!pc.remoteDescription) {
+          state.pendingIceCandidates.push(candidate);
+          return;
+        }
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (error) {
+          showError("Ошибка сетевого подключения", error.message || "Не удалось добавить сетевой маршрут участника.");
+        }
+      }
+
+      async function flushRemoteIceCandidates() {
+        const candidates = state.pendingIceCandidates.splice(0);
+        for (const candidate of candidates) await addRemoteIceCandidate(candidate);
+      }
+
+      function showRemoteGuest(stream, role) {
+        state.remoteStream = stream;
+        const remoteVideo = $("guestVideo");
+        remoteVideo.srcObject = stream;
+        remoteVideo.hidden = false;
+        $("guestLabel").hidden = false;
+        $("guestLabel").textContent = role === "host" ? "Второй стример" : "Стример";
+        stage.classList.add("has-guest", "has-video");
+        remoteVideo.play().catch(() => {
+          setGuestStatus("Видео подключено. Если нет звука, нажмите по видео и проверьте громкость.");
+        });
+      }
+
+      function clearRemoteGuest() {
+        clearTimeout(state.peerDisconnectTimer);
+        state.peerDisconnectTimer = null;
+        const remoteVideo = $("guestVideo");
+        remoteVideo.pause();
+        remoteVideo.srcObject = null;
+        remoteVideo.hidden = true;
+        $("guestLabel").hidden = true;
+        stage.classList.remove("has-guest");
+        state.remoteStream = null;
+      }
+
+      function dropPeerConnection() {
+        state.signalingUnsubs.splice(0).forEach((unsubscribe) => unsubscribe());
+        state.peerConnection?.close();
+        state.peerConnection = null;
+        state.peerSenders = Object.create(null);
+        state.pendingIceCandidates = [];
+        clearRemoteGuest();
+      }
+
+      function createPeerConnection(role) {
+        if (!window.RTCPeerConnection) {
+          throw new Error("Этот браузер не поддерживает WebRTC. Открой сайт в актуальном Safari или Chrome.");
+        }
+        const pc = new RTCPeerConnection({
+          iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+        });
+        state.peerConnection = pc;
+        pc.ontrack = (event) => {
+          const remoteStream = event.streams[0] || new MediaStream([event.track]);
+          showRemoteGuest(remoteStream, role);
+        };
+        pc.onicecandidate = (event) => {
+          if (!event.candidate || !state.roomRef || !state.roomRole) return;
+          const path = state.roomRole === "host" ? "hostCandidates" : "guestCandidates";
+          state.roomRef.child(path).push(event.candidate.toJSON()).catch((error) => {
+            showError("Не удалось обменяться сетевыми данными", error.message || "Проверь настройки Firebase.");
+          });
+        };
+        pc.onconnectionstatechange = () => {
+          if (pc !== state.peerConnection) return;
+          if (pc.connectionState === "connected") {
+            clearTimeout(state.peerDisconnectTimer);
+            state.peerDisconnectTimer = null;
+            const message = role === "host" ? "Второй стример подключён." : "Подключено к стримеру.";
+            setGuestStatus(message);
+          } else if (pc.connectionState === "disconnected") {
+            setGuestStatus("Связь прервалась, пробуем восстановить соединение…");
+            state.peerDisconnectTimer = setTimeout(() => {
+              if (pc.connectionState === "disconnected") {
+                showError("Связь со стримером прервана", "Проверьте интернет на обоих устройствах и попробуйте подключиться снова.");
+              }
+            }, 8000);
+          } else if (pc.connectionState === "failed") {
+            setGuestStatus("Сеть не пропускает прямое соединение. Может понадобиться TURN-сервер.");
+            showError("Не удалось соединить стримеров", "Эта сеть может блокировать прямой WebRTC. Для надёжной связи нужен TURN-сервер.");
+          }
+        };
+        return pc;
+      }
+
+      async function createHostPeer() {
+        if (state.peerConnection || !state.roomRef || !state.guestUid) return;
+        const pc = createPeerConnection("host");
+        state.peerSenders.video = pc.addTransceiver("video", { direction: "sendrecv" }).sender;
+        state.peerSenders.audio = pc.addTransceiver("audio", { direction: "sendrecv" }).sender;
+        await updatePeerSenders();
+
+        const answerRef = state.roomRef.child("answer");
+        const guestCandidatesRef = state.roomRef.child("guestCandidates");
+        watchSignal(answerRef, "value", async (snapshot) => {
+          if (!snapshot.exists() || pc !== state.peerConnection || pc.remoteDescription) return;
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(snapshot.val()));
+            await flushRemoteIceCandidates();
+          } catch (error) {
+            showError("Не удалось принять ответ стримера", error.message || "Попробуйте создать новую комнату.");
+          }
+        });
+        watchSignal(guestCandidatesRef, "child_added", (snapshot) => {
+          if (snapshot.exists()) addRemoteIceCandidate(snapshot.val());
+        });
+
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          await state.roomRef.child("offer").set(pc.localDescription.toJSON());
+          setGuestStatus("Ссылка готова. Ожидаем подключения второго стримера…");
+        } catch (error) {
+          showError("Не удалось создать приглашение", error.message || "Проверьте интернет и настройки Firebase.");
+          await endGuestRoom();
+        }
+      }
+
+      async function createGuestRoom() {
+        if (state.creatingGuestRoom) return;
+        state.creatingGuestRoom = true;
+        $("guestButton").disabled = true;
+        openGuestDialog();
+        $("guestDialogTitle").textContent = "Пригласить второго стримера";
+        $("guestDialogDescription").textContent = "Скопируй ссылку и отправь её участнику. Он откроет её на своём устройстве и разрешит доступ к камере и микрофону.";
+        $("guestHostPanel").hidden = false;
+        $("guestJoinPanel").hidden = true;
+        $("guestSetupHelp").hidden = !isFirebaseConfigured();
+        $("guestInviteLink").value = "";
+        setGuestStatus("Подключаем комнату…");
+        try {
+          if (state.roomRole === "host" && state.roomId) {
+            $("guestInviteLink").value = state.inviteLink;
+            setGuestStatus(state.guestUid ? "Второй стример подключён." : "Ожидаем подключения второго стримера…");
+            return;
+          }
+          const user = await firebaseUser();
+          if (!getOutboundVideoTrack()) {
+            if (hasActiveScreenShare()) {
+              throw new Error("Демонстрация экрана не содержит активного видео. Выбери экран ещё раз.");
+            }
+            await acquireCamera();
+          }
+          if (state.micEnabled && !getOutboundAudioTrack()) {
+            const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            if (!state.stream) state.stream = new MediaStream();
+            audioStream.getAudioTracks().forEach((track) => state.stream.addTrack(track));
+          }
+          const roomId = createRoomId();
+          const roomRef = state.firebaseDb.ref(`rooms/${roomId}`);
+          state.roomRole = "host";
+          state.roomId = roomId;
+          state.roomRef = roomRef;
+          state.inviteLink = makeInviteLink(roomId);
+            state.guestUidRef = roomRef.child("guestUid");
+          await roomRef.set({ hostUid: user.uid, createdAt: firebase.database.ServerValue.TIMESTAMP });
+          await roomRef.onDisconnect().remove();
+          $("guestInviteLink").value = state.inviteLink;
+          watchSignal(state.guestUidRef, "value", (snapshot) => {
+            const guestUid = snapshot.val();
+            if (!guestUid) {
+              if (state.peerConnection) {
+                setGuestStatus("Гость отключился. Создай новое приглашение для повторного подключения.");
+                endGuestRoom();
+              }
+              state.guestUid = null;
+              return;
+            }
+            if (guestUid === user.uid) {
+              showError("Нельзя подключиться к своей ссылке", "Открой приглашение на другом устройстве или в другом браузере.");
+              return;
+            }
+            state.guestUid = guestUid;
+            createHostPeer().catch(async (error) => {
+              showError("Не удалось подключить стримера", error.message);
+              await endGuestRoom();
+            });
+          }, "room");
+          setGuestStatus("Ссылка готова. Ожидаем подключения второго стримера…");
+        } catch (error) {
+          $("guestSetupHelp").hidden = isFirebaseConfigured();
+          setGuestStatus(error.message || "Не удалось создать комнату.");
+          showError("Не удалось создать приглашение", error.message || "Проверь настройки Firebase и подключение к интернету.");
+          if (state.roomRole) await endGuestRoom();
+        } finally {
+          state.creatingGuestRoom = false;
+          $("guestButton").disabled = false;
+        }
+      }
+
+      async function joinGuestRoom(roomId) {
+        $("joinGuestRoom").disabled = true;
+        $("guestJoinStatus").textContent = "Подключаемся…";
+        let pendingStream = null;
+        try {
+          if (!/^[a-f0-9]{36}$/i.test(roomId)) throw new Error("Ссылка-приглашение повреждена или неполная.");
+          const user = await firebaseUser();
+          const { db } = firebaseServices();
+          const roomRef = db.ref(`rooms/${roomId}`);
+          const roomSnapshot = await roomRef.once("value");
+          if (!roomSnapshot.exists()) throw new Error("Комната не найдена. Попроси стримера создать новое приглашение.");
+          if (roomSnapshot.child("hostUid").val() === user.uid) throw new Error("Открой приглашение на другом устройстве или в другом браузере.");
+
+          const localStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: state.facingMode } },
+            audio: true
+          });
+          pendingStream = localStream;
+          state.stream?.getTracks().forEach((track) => track.stop());
+          state.stream = localStream;
+          state.micEnabled = true;
+          attachStream(localStream);
+          const guestUidRef = roomRef.child("guestUid");
+          const claim = await guestUidRef.transaction((currentUid) => currentUid === null ? user.uid : undefined, undefined, false);
+          if (!claim.committed) {
+            localStream.getTracks().forEach((track) => track.stop());
+            state.stream = null;
+            throw new Error("К этой комнате уже подключён другой стример.");
+          }
+          state.roomRole = "guest";
+          state.roomId = roomId;
+          state.roomRef = roomRef;
+          state.guestUidRef = guestUidRef;
+          await guestUidRef.onDisconnect().remove();
+          const pc = createPeerConnection("guest");
+          localStream.getTracks().forEach((track) => {
+            state.peerSenders[track.kind] = pc.addTrack(track, localStream);
+          });
+          const offerRef = roomRef.child("offer");
+          watchSignal(offerRef, "value", async (snapshot) => {
+            if (!snapshot.exists() || pc !== state.peerConnection || pc.remoteDescription) return;
+            try {
+              await pc.setRemoteDescription(new RTCSessionDescription(snapshot.val()));
+              await flushRemoteIceCandidates();
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+              await roomRef.child("answer").set(pc.localDescription.toJSON());
+              setGuestStatus("Ответ отправлен. Подключаем видео…");
+            } catch (error) {
+              showError("Не удалось ответить на приглашение", error.message || "Попроси стримера создать новую ссылку.");
+            }
+          });
+          watchSignal(roomRef.child("hostCandidates"), "child_added", (snapshot) => {
+            if (snapshot.exists()) addRemoteIceCandidate(snapshot.val());
+          });
+          watchSignal(roomRef, "value", (snapshot) => {
+            if (!snapshot.exists() && state.roomRole === "guest") {
+              showError("Стример завершил подключение", "Попроси его создать и отправить новую ссылку.");
+              endGuestRoom(false);
+            }
+          }, "room");
+          $("guestDialogTitle").textContent = "Подключение к стримеру";
+          $("guestDialogDescription").textContent = "Оставь эту страницу открытой, пока идёт эфир.";
+          setGuestStatus("Камера и микрофон включены. Ожидаем видео стримера…");
+          pendingStream = null;
+        } catch (error) {
+          if (state.roomRole === "guest") {
+            await endGuestRoom();
+          } else if (pendingStream) {
+            pendingStream.getTracks().forEach((track) => track.stop());
+            if (state.stream === pendingStream) state.stream = null;
+            if (video.srcObject === pendingStream) {
+              video.pause();
+              video.srcObject = null;
+              video.hidden = true;
+              stage.classList.remove("has-video");
+              $("cameraLabel").hidden = true;
+            }
+          }
+          $("guestJoinStatus").textContent = error.message || "Не удалось подключиться.";
+          showError("Не удалось подключиться к стримеру", error.message || "Проверьте ссылку, разрешения камеры и интернет.");
+        } finally {
+          $("joinGuestRoom").disabled = false;
+        }
+      }
+
+      async function endGuestRoom(removeRoom = true) {
+        const role = state.roomRole;
+        const roomRef = state.roomRef;
+        const guestUidRef = state.guestUidRef;
+        dropPeerConnection();
+        state.roomUnsubs.splice(0).forEach((unsubscribe) => unsubscribe());
+        state.roomRole = null;
+        state.roomId = null;
+        state.roomRef = null;
+        state.guestUidRef = null;
+        state.guestUid = null;
+        state.inviteLink = "";
+        if (role === "host" && removeRoom && roomRef) {
+          try {
+            await roomRef.onDisconnect().cancel();
+            await roomRef.remove();
+          } catch (error) {
+            showError("Не удалось закрыть комнату", error.message || "Закрой страницу, чтобы комната автоматически завершилась.");
+          }
+        } else if (role === "guest" && guestUidRef) {
+          try {
+            await guestUidRef.onDisconnect().cancel();
+            await guestUidRef.remove();
+          } catch (error) {
+            showError("Не удалось отключиться от комнаты", error.message || "Закрой страницу, чтобы подключение завершилось.");
+          }
+          state.stream?.getTracks().forEach((track) => track.stop());
+          state.stream = null;
+          video.pause();
+          video.srcObject = null;
+          video.hidden = true;
+          stage.classList.remove("has-video");
+          $("cameraLabel").hidden = true;
+          updateCameraButton();
+          updateFlipButtons();
+        }
+        if (role === "host") setGuestStatus("Подключение завершено.");
       }
 
       function downloadRecording(blob) {
@@ -978,6 +1491,17 @@
           video: { facingMode: { ideal: state.facingMode } },
           audio: state.micEnabled
         });
+        if (state.stream && state.stream !== stream) {
+          const preserveAudio = stream.getAudioTracks().length === 0;
+          state.stream.getTracks().forEach((track) => {
+            if (preserveAudio && track.kind === "audio" && track.readyState === "live") {
+              track.enabled = state.micEnabled;
+              stream.addTrack(track);
+            } else {
+              track.stop();
+            }
+          });
+        }
         hideError();
         attachStream(stream);
       }
@@ -992,6 +1516,7 @@
           state.stream.removeTrack(state.stream.getVideoTracks()[0]);
           updateCameraButton();
           updateFlipButtons();
+          updatePeerSenders();
           return;
         }
         try {
@@ -1010,6 +1535,7 @@
           } else {
             attachStream(stream);
           }
+          updatePeerSenders();
           hideError();
         } catch (error) {
           showError("Не удалось включить камеру", explainMediaError(error));
@@ -1037,19 +1563,21 @@
           hideError();
           updateFlipButtons();
           video.play().catch(() => {});
+          updatePeerSenders();
         } catch (error) {
           showError("Не удалось переключить камеру", explainMediaError(error));
         }
       }
 
       async function enableMicTrack() {
-        if (!state.live || !state.micEnabled || (state.stream && state.stream.getAudioTracks().length)) return;
+        if ((!state.live && !state.roomRole) || !state.micEnabled || (state.stream && state.stream.getAudioTracks().length)) return;
         try {
           const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
           const audioTrack = audioStream.getAudioTracks()[0];
-          if (!state.live) { audioTrack.stop(); return; }
+          if (!state.live && !state.roomRole) { audioTrack.stop(); return; }
           if (!state.stream) state.stream = new MediaStream();
           state.stream.addTrack(audioTrack);
+          updatePeerSenders();
           hideError();
         } catch (error) {
           state.micEnabled = false;
@@ -1168,6 +1696,7 @@
           scheduleChat();
           hideError();
           startSpeechRecognition();
+          updatePeerSenders();
           chatFeed.scrollTop = chatFeed.scrollHeight;
         } catch (error) {
           showError("Не удалось начать эфир", explainMediaError(error));
@@ -1178,7 +1707,8 @@
       }
 
       function stopStream() {
-        if (!state.live && !state.stream && !state.screenStream) return;
+        if (!state.live && !state.stream && !state.screenStream && !state.roomRole) return;
+        if (state.roomRole) endGuestRoom();
         stopRecording();
         state.live = false;
         clearInterval(state.interval);
@@ -1203,6 +1733,7 @@
         video.classList.remove("mirror");
         stage.classList.remove("has-video");
         $("cameraLabel").hidden = true;
+        clearRemoteGuest();
         $("flipButton").hidden = true;
         $("flipButtonMobile").hidden = true;
         state.viewers = 0;
@@ -1228,6 +1759,8 @@
       $("recordButton").addEventListener("click", toggleRecording);
       micButton.addEventListener("click", async () => {
         state.micEnabled = !state.micEnabled;
+        [...(state.stream?.getAudioTracks() || []), ...(state.screenStream?.getAudioTracks() || [])]
+          .forEach((track) => { track.enabled = state.micEnabled; });
         updateMicButton();
         if (state.micEnabled) {
           await enableMicTrack();
@@ -1235,6 +1768,7 @@
         } else {
           stopSpeechRecognition();
         }
+        updatePeerSenders();
       });
       $("speechButton").addEventListener("click", () => {
         if (state.speechEnabled) stopSpeechRecognition();
@@ -1244,6 +1778,42 @@
       $("flipButtonMobile").addEventListener("click", flipCamera);
       startButton.addEventListener("click", startStream);
       endButton.addEventListener("click", stopStream);
+      $("guestButton").addEventListener("click", () => {
+        if (state.roomRole === "host") {
+          $("guestDialogTitle").textContent = "Приглашение второго стримера";
+          $("guestDialogDescription").textContent = "Отправь ссылку участнику. Комната будет активна, пока страница открыта.";
+          $("guestHostPanel").hidden = false;
+          $("guestJoinPanel").hidden = true;
+          $("guestSetupHelp").hidden = !isFirebaseConfigured();
+          $("guestInviteLink").value = state.inviteLink;
+          setGuestStatus(state.guestUid ? "Второй стример подключён." : "Ожидаем подключения второго стримера…");
+          openGuestDialog();
+          return;
+        }
+        createGuestRoom();
+      });
+      $("copyGuestLink").addEventListener("click", async () => {
+        const inviteLink = $("guestInviteLink").value;
+        if (!inviteLink) return;
+        try {
+          await navigator.clipboard.writeText(inviteLink);
+          setGuestStatus("Ссылка скопирована. Отправь её второму стримеру.");
+        } catch (error) {
+          $("guestInviteLink").select();
+          const copied = document.execCommand("copy");
+          if (copied) setGuestStatus("Ссылка скопирована. Отправь её второму стримеру.");
+          else setGuestStatus("Не удалось скопировать автоматически — выдели и скопируй ссылку вручную.");
+        }
+      });
+      $("stopGuestRoom").addEventListener("click", () => endGuestRoom());
+      $("closeGuestDialog").addEventListener("click", () => $("guestDialog").close());
+      $("joinGuestRoom").addEventListener("click", () => {
+        if (state.joinRoomId) joinGuestRoom(state.joinRoomId);
+      });
+      $("cancelGuestJoin").addEventListener("click", async () => {
+        if (state.roomRole === "guest") await endGuestRoom();
+        $("guestDialog").close();
+      });
       $("fullscreenButton").addEventListener("click", async () => {
         try {
           if (!document.fullscreenElement) await $("stage").requestFullscreen();
@@ -1276,8 +1846,17 @@
         state.dialogueTimeouts.forEach(clearTimeout);
         state.screenStream?.getTracks().forEach((track) => track.stop());
         state.stream?.getTracks().forEach((track) => track.stop());
+        state.peerConnection?.close();
       });
       setLiveInterface(false);
+      if (state.joinRoomId) {
+        $("guestHostPanel").hidden = true;
+        $("guestJoinPanel").hidden = false;
+        $("guestSetupHelp").hidden = isFirebaseConfigured();
+        $("guestDialogTitle").textContent = "Подключиться к стримеру";
+        $("guestDialogDescription").textContent = "Откройте страницу на устройстве, с которого будете участвовать в эфире.";
+        openGuestDialog();
+      }
     })();
   </script>
 </body>
