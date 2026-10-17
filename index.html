@@ -113,6 +113,9 @@
     button:disabled { opacity: .48; cursor: not-allowed; }
     .control-hint { color: #92929d; font-size: 11px; }
     .sound-state { color: #aaaab4; font-size: 11px; }
+    .record-state { color: #ff7774; font-size: 11px; font-weight: 800; white-space: nowrap; }
+    .record-state::before { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; content: ""; vertical-align: 1px; }
+    .record-button.is-recording { background: #5c272a; border-color: #98474a; color: #ffd5d3; }
 
     .chat-panel {
       position: absolute; z-index: 3; right: auto; bottom: 16px; left: 18px;
@@ -228,7 +231,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg>
             </div>
             <h1>Ваша сцена готова</h1>
-            <p>Включите камеру для предпросмотра или начинайте эфир — зрители уже ждут.</p>
+            <p>Включите камеру или покажите экран — можно переключаться между вкладками и окнами во время эфира.</p>
           </div>
           <div class="video-shade"></div>
           <div class="stage-chips">
@@ -261,6 +264,9 @@
             <button class="icon-button" id="cameraButton" type="button" title="Включить камеру" aria-label="Включить камеру">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg>
             </button>
+            <button class="icon-button" id="screenButton" type="button" title="Показать экран" aria-label="Начать демонстрацию экрана">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4m-4-9 3-3 2 2 3-4"/></svg>
+            </button>
             <button class="icon-button" id="flipButton" type="button" title="Переключить камеру" aria-label="Переключить переднюю или заднюю камеру" hidden>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6.5L20 12M4 12l2 5.5A7 7 0 0 0 18.4 15"/></svg>
             </button>
@@ -275,6 +281,8 @@
               <span>▶</span><span>Начать эфир</span>
             </button>
             <button class="end-button" id="endButton" type="button"><span>■</span><span>Завершить эфир</span></button>
+            <button class="secondary-button record-button" id="recordButton" type="button" title="Записать MP4-видео для QuickTime Player">⏺ Запись MP4</button>
+            <span class="record-state" id="recordStatus" hidden>ЗАПИСЬ · 00:00</span>
             <span class="control-hint" id="controlHint">Камера и микрофон запросят доступ</span>
           </div>
           <div class="control-right">
@@ -301,10 +309,17 @@
       const startButton = $("startButton");
       const endButton = $("endButton");
       const cameraButton = $("cameraButton");
+      const screenButton = $("screenButton");
       const micButton = $("micButton");
       const chatFeed = $("chatFeed");
       const state = {
         stream: null,
+        screenStream: null,
+        recorder: null,
+        recordedChunks: [],
+        recordingStartedAt: 0,
+        recordingTimer: null,
+        recordingStream: null,
         live: false,
         micEnabled: true,
         facingMode: "user",
@@ -550,11 +565,22 @@
         video.play().catch(() => {});
       }
 
+      function hasActiveScreenShare() {
+        return Boolean(state.screenStream && state.screenStream.getVideoTracks().some((track) => track.readyState === "live"));
+      }
+
       function updateCameraButton() {
         const enabled = Boolean(state.stream && state.stream.getVideoTracks().some((track) => track.readyState === "live" && track.enabled));
         cameraButton.classList.toggle("active", enabled);
         cameraButton.title = enabled ? "Выключить камеру" : "Включить камеру";
         cameraButton.setAttribute("aria-label", cameraButton.title);
+        if (hasActiveScreenShare()) {
+          video.hidden = false;
+          stage.classList.add("has-video");
+          $("cameraLabel").hidden = false;
+          $("cameraLabel").textContent = "Демонстрация экрана";
+          return;
+        }
         $("cameraLabel").hidden = !enabled;
         if (enabled) {
           video.hidden = false;
@@ -563,6 +589,211 @@
           video.hidden = true;
           stage.classList.remove("has-video");
         }
+      }
+
+      function updateScreenButton() {
+        const sharing = hasActiveScreenShare();
+        screenButton.classList.toggle("active", sharing);
+        screenButton.title = sharing ? "Остановить демонстрацию экрана" : "Показать экран";
+        screenButton.setAttribute("aria-label", screenButton.title);
+      }
+
+      function stopScreenShare(stopTracks = true) {
+        const screenStream = state.screenStream;
+        state.screenStream = null;
+        if (stopTracks) screenStream?.getTracks().forEach((track) => track.stop());
+        const cameraTrack = state.stream?.getVideoTracks().find((track) => track.readyState === "live" && track.enabled);
+        if (cameraTrack) {
+          video.srcObject = state.stream;
+          video.classList.toggle("mirror", state.facingMode === "user");
+          video.hidden = false;
+          video.play().catch(() => {});
+        } else {
+          video.pause();
+          video.srcObject = null;
+          video.hidden = true;
+          stage.classList.remove("has-video");
+        }
+        updateScreenButton();
+        updateCameraButton();
+      }
+
+      async function toggleScreenShare() {
+        if (preventSourceChangeDuringRecording()) return;
+        if (hasActiveScreenShare()) {
+          stopScreenShare();
+          hideError();
+          return;
+        }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+          showError("Демонстрация экрана недоступна", "Открой страницу в актуальном Chrome, Edge или Firefox через HTTPS либо localhost. Браузер должен поддерживать захват экрана.");
+          return;
+        }
+        try {
+          const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30, max: 60 } }, audio: true });
+          const screenTrack = screenStream.getVideoTracks()[0];
+          if (!screenTrack) {
+            screenStream.getTracks().forEach((track) => track.stop());
+            showError("Экран не выбран", "Выбери экран, окно или вкладку в системном окне браузера.");
+            return;
+          }
+          state.screenStream = screenStream;
+          screenTrack.addEventListener("ended", () => {
+            if (state.screenStream === screenStream) stopScreenShare(false);
+          }, { once: true });
+          video.srcObject = screenStream;
+          video.classList.remove("mirror");
+          video.hidden = false;
+          stage.classList.add("has-video");
+          $("cameraLabel").hidden = false;
+          $("cameraLabel").textContent = "Демонстрация экрана";
+          updateScreenButton();
+          hideError();
+          video.play().catch(() => {});
+        } catch (error) {
+          if (error.name === "NotAllowedError") return;
+          if (error.name === "NotFoundError") {
+            showError("Не найден экран для показа", "Подключи экран или выбери другое окно, затем попробуй снова.");
+          } else {
+            showError("Не удалось показать экран", "Проверь разрешение браузера на запись экрана. На macOS оно настраивается в «Системные настройки → Конфиденциальность и безопасность → Запись экрана».");
+          }
+        }
+      }
+
+      function formatRecordingTime() {
+        const seconds = Math.floor((Date.now() - state.recordingStartedAt) / 1000);
+        return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+      }
+
+      function getRecordingVideoTrack() {
+        const screenTrack = state.screenStream?.getVideoTracks().find((track) => track.readyState === "live");
+        if (screenTrack) return screenTrack;
+        return state.stream?.getVideoTracks().find((track) => track.readyState === "live" && track.enabled) || null;
+      }
+
+      function isRecording() {
+        return Boolean(state.recorder && state.recorder.state !== "inactive");
+      }
+
+      function preventSourceChangeDuringRecording() {
+        if (!isRecording()) return false;
+        showError("Сначала останови запись", "Останови и сохрани текущий MP4, затем выбери камеру или демонстрацию экрана и начни новую запись.");
+        return true;
+      }
+
+      function downloadRecording(blob) {
+        $("recordStatus").hidden = true;
+        $("recordButton").classList.remove("is-recording");
+        $("recordButton").textContent = "⏺ Запись MP4";
+        $("recordButton").title = "Записать MP4-видео для QuickTime Player";
+        if (!blob || blob.size === 0) {
+          showError("Запись не сохранена", "Браузер не создал видеофайл. Попробуй записать ещё раз.");
+          return;
+        }
+        if (!blob.type.toLowerCase().includes("mp4")) {
+          showError("Видео не совместимо с QuickTime", "Браузер создал запись не в MP4. Используй Safari или другой браузер с поддержкой записи MP4.");
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        link.href = url;
+        link.download = `stream-${timestamp}.mp4`;
+        link.style.display = "none";
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      }
+
+      async function startRecording() {
+        if (!window.MediaRecorder || !window.MediaStream || typeof MediaRecorder.isTypeSupported !== "function") {
+          showError("Запись MP4 недоступна", "Для записи в формате QuickTime открой страницу в Safari на iPhone или в совместимом браузере на компьютере.");
+          return;
+        }
+        const videoTrack = getRecordingVideoTrack();
+        if (!videoTrack || video.hidden || !video.videoWidth || !video.videoHeight) {
+          showError("Сначала включи камеру или демонстрацию экрана", "Нажми кнопку камеры или экрана, чтобы выбрать источник видео для записи.");
+          return;
+        }
+        state.recordedChunks = [];
+        try {
+          const mimeType = [
+            'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
+            "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+            'video/mp4;codecs="avc1"',
+            "video/mp4;codecs=avc1",
+            "video/mp4"
+          ].find((type) => MediaRecorder.isTypeSupported(type));
+          if (!mimeType) {
+            showError("Браузер не поддерживает запись MP4", "Для файла, совместимого с QuickTime Player, открой симулятор в Safari на iPhone или в браузере с поддержкой MediaRecorder MP4.");
+            return;
+          }
+          const audioTracks = [
+            ...(state.screenStream?.getAudioTracks() || []),
+            ...(state.stream?.getAudioTracks() || [])
+          ].filter((track) => track.readyState === "live" && track.enabled);
+          state.recordingStream = new MediaStream([videoTrack, ...audioTracks]);
+          state.recorder = new MediaRecorder(state.recordingStream, { mimeType });
+          if (!state.recorder.mimeType.toLowerCase().includes("mp4")) {
+            state.recorder = null;
+            state.recordingStream = null;
+            showError("Браузер не смог создать MP4", "Попробуй открыть симулятор в Safari, который поддерживает запись MP4 для QuickTime Player.");
+            return;
+          }
+          state.recorder.ondataavailable = (event) => {
+            if (event.data && event.data.size) state.recordedChunks.push(event.data);
+          };
+          state.recorder.onerror = () => {
+            showError("Ошибка записи", "Запись прервалась. Проверь свободное место и попробуй снова.");
+            stopRecording();
+          };
+          state.recorder.onstop = () => {
+            const type = state.recorder?.mimeType || "video/webm";
+            const recording = new Blob(state.recordedChunks, { type });
+            state.recorder = null;
+            state.recordingStream = null;
+            state.recordedChunks = [];
+            clearInterval(state.recordingTimer);
+            state.recordingTimer = null;
+            downloadRecording(recording);
+          };
+          state.recorder.start(1000);
+          state.recordingStartedAt = Date.now();
+          $("recordStatus").hidden = false;
+          $("recordStatus").textContent = `ЗАПИСЬ ${state.screenStream ? "ЭКРАНА" : "КАМЕРЫ"} · ${formatRecordingTime()}`;
+          $("recordButton").classList.add("is-recording");
+          $("recordButton").textContent = "■ Стоп";
+          $("recordButton").title = "Остановить запись и сохранить MP4-видео";
+          state.recordingTimer = setInterval(() => {
+            $("recordStatus").textContent = `ЗАПИСЬ ${state.screenStream ? "ЭКРАНА" : "КАМЕРЫ"} · ${formatRecordingTime()}`;
+          }, 1000);
+          videoTrack.addEventListener("ended", stopRecording, { once: true });
+          hideError();
+        } catch (error) {
+          state.recordingStream = null;
+          state.recorder = null;
+          state.recordedChunks = [];
+          showError("Не удалось начать запись", error.name === "NotSupportedError"
+            ? "Формат видеозаписи не поддерживается этим браузером. Обнови браузер и попробуй снова."
+            : "Не удалось открыть источник видео для записи. Перезапусти демонстрацию экрана или камеру.");
+        }
+      }
+
+      function stopRecording() {
+        if (!state.recorder || state.recorder.state === "inactive") return;
+        clearInterval(state.recordingTimer);
+        state.recordingTimer = null;
+        try { state.recorder.stop(); } catch {
+          state.recorder = null;
+          state.recordingStream = null;
+          $("recordStatus").hidden = true;
+        }
+      }
+
+      function toggleRecording() {
+        if (state.recorder && state.recorder.state !== "inactive") stopRecording();
+        else startRecording();
       }
 
       function updateMicButton() {
@@ -752,6 +983,10 @@
       }
 
       async function enableCamera() {
+        if (preventSourceChangeDuringRecording()) return;
+        if (hasActiveScreenShare() && !(state.stream && state.stream.getVideoTracks().some((track) => track.readyState === "live"))) {
+          stopScreenShare();
+        }
         if (state.stream && state.stream.getVideoTracks().some((track) => track.readyState === "live")) {
           state.stream.getVideoTracks().forEach((track) => { track.enabled = false; track.stop(); });
           state.stream.removeTrack(state.stream.getVideoTracks()[0]);
@@ -782,6 +1017,7 @@
       }
 
       async function flipCamera() {
+        if (preventSourceChangeDuringRecording()) return;
         if (!state.stream || !state.stream.getVideoTracks().length) return;
         const nextMode = state.facingMode === "user" ? "environment" : "user";
         try {
@@ -899,7 +1135,12 @@
         startButton.innerHTML = "<span>…</span><span>Подключение</span>";
         try {
           if (!state.stream || !state.stream.getVideoTracks().some((track) => track.readyState === "live")) {
-            await acquireCamera();
+            if (!hasActiveScreenShare()) {
+              await acquireCamera();
+            } else if (state.micEnabled && (!state.stream || !state.stream.getAudioTracks().length)) {
+              const audio = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+              state.stream = audio;
+            }
           } else if (state.micEnabled && !state.stream.getAudioTracks().length) {
             const audio = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             audio.getTracks().forEach((track) => state.stream.addTrack(track));
@@ -937,7 +1178,8 @@
       }
 
       function stopStream() {
-        if (!state.live && !state.stream) return;
+        if (!state.live && !state.stream && !state.screenStream) return;
+        stopRecording();
         state.live = false;
         clearInterval(state.interval);
         clearTimeout(state.chatTimeout);
@@ -949,6 +1191,10 @@
         state.dialogueTimeouts = [];
         state.interval = null;
         state.chatTimeout = null;
+        const screenStream = state.screenStream;
+        state.screenStream = null;
+        screenStream?.getTracks().forEach((track) => track.stop());
+        updateScreenButton();
         state.stream?.getTracks().forEach((track) => track.stop());
         state.stream = null;
         video.pause();
@@ -978,6 +1224,8 @@
       }
 
       cameraButton.addEventListener("click", enableCamera);
+      screenButton.addEventListener("click", toggleScreenShare);
+      $("recordButton").addEventListener("click", toggleRecording);
       micButton.addEventListener("click", async () => {
         state.micEnabled = !state.micEnabled;
         updateMicButton();
@@ -1019,12 +1267,14 @@
       });
       window.addEventListener("resize", updateFlipButtons);
       window.addEventListener("pagehide", () => {
+        stopRecording();
         clearInterval(state.interval);
         clearTimeout(state.chatTimeout);
         clearTimeout(state.speechRestartTimeout);
         state.speechRecognition?.abort();
         state.birthdayTimeouts.forEach(clearTimeout);
         state.dialogueTimeouts.forEach(clearTimeout);
+        state.screenStream?.getTracks().forEach((track) => track.stop());
         state.stream?.getTracks().forEach((track) => track.stop());
       });
       setLiveInterface(false);
