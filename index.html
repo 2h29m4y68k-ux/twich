@@ -1352,25 +1352,63 @@
         state.speechRecognition = null;
         if (recognition) {
           recognition.onend = null;
-          recognition.abort();
+          recognition.onerror = null;
+          recognition.onresult = null;
+          try { recognition.abort(); } catch {}
         }
         setSpeechButton(false);
       }
 
-      function startSpeechRecognition() {
-        if (!state.live || !state.micEnabled || state.speechEnabled) return;
+      async function ensureSpeechAudio() {
+        if (!state.live) {
+          showError("Сначала начни эфир", "Нажми «Начать эфир», затем включи распознавание речи.");
+          return false;
+        }
+        if (!state.micEnabled) {
+          state.micEnabled = true;
+          updateMicButton();
+        }
+        const hasAudio = Boolean(state.stream && state.stream.getAudioTracks().some((track) => track.readyState === "live"));
+        if (hasAudio) return true;
+        try {
+          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          if (!state.stream) state.stream = new MediaStream();
+          const audioTrack = audioStream.getAudioTracks()[0];
+          if (audioTrack) {
+            const existing = state.stream.getAudioTracks().find((track) => track.id === audioTrack.id);
+            if (!existing) state.stream.addTrack(audioTrack);
+            if (state.stream !== audioStream) {
+              audioStream.getTracks().forEach((track) => track.stop());
+            }
+          }
+          updateMicButton();
+          updatePeerSenders();
+          return true;
+        } catch (error) {
+          stopSpeechRecognition();
+          showError("Нет доступа к микрофону", explainMediaError(error));
+          return false;
+        }
+      }
+
+      async function startSpeechRecognition() {
+        if (state.speechEnabled || state.speechRecognition) return;
+        if (!(await ensureSpeechAudio())) return;
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-          showError("Распознавание речи недоступно", "Используйте браузер с поддержкой Web Speech API, например актуальный Chrome. Функция может требовать интернет-соединение.");
+          showError("Распознавание речи недоступно", "Используйте актуальный Chrome, Edge или Safari. В некоторых браузерах Web Speech API требует HTTPS/localhost.");
           return;
         }
         const recognition = new SpeechRecognition();
         recognition.lang = "ru-RU";
         recognition.continuous = true;
         recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
         state.speechRecognition = recognition;
-        state.speechEnabled = true;
-        setSpeechButton(true);
+        state.speechEnabled = false;
+        setSpeechButton(false);
+
         recognition.onresult = (event) => {
           for (let index = event.resultIndex; index < event.results.length; index += 1) {
             const result = event.results[index];
@@ -1378,12 +1416,19 @@
           }
         };
         recognition.onerror = (event) => {
-          if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+          if (["not-allowed", "service-not-allowed", "audio-capture", "aborted"].includes(event.error)) {
             stopSpeechRecognition();
-            showError("Нет доступа к распознаванию речи", "Разрешите использование микрофона для распознавания речи в браузере и нажмите кнопку распознавания ещё раз.");
-          } else if (event.error === "network") {
-            showError("Распознавание речи приостановлено", "Сервис распознавания браузера недоступен. Проверьте интернет-соединение.");
+            showError("Нет доступа к распознаванию речи", "Разрешите микрофон в браузере и ещё раз нажмите кнопку распознавания речи.");
+            return;
           }
+          if (event.error === "network") {
+            showError("Распознавание речи приостановлено", "Сервис распознавания браузера временно недоступен. Проверьте интернет-соединение и нажмите кнопку снова.");
+            return;
+          }
+          if (event.error === "no-speech") {
+            return;
+          }
+          showError("Ошибка распознавания речи", "Попробуйте ещё раз или перезапустите эфир.");
         };
         recognition.onend = () => {
           if (state.speechRecognition !== recognition || !state.live || !state.speechEnabled) return;
@@ -1395,14 +1440,20 @@
               stopSpeechRecognition();
               showError("Не удалось продолжить распознавание", "Нажмите кнопку распознавания речи, чтобы запустить его снова.");
             }
-          }, 400);
+          }, 350);
         };
+
+        recognition.onstart = () => {
+          state.speechEnabled = true;
+          setSpeechButton(true);
+          hideError();
+        };
+
         try {
           recognition.start();
-          hideError();
         } catch (error) {
           stopSpeechRecognition();
-          showError("Не удалось включить распознавание", "Проверьте разрешение на микрофон и попробуйте ещё раз.");
+          showError("Не удалось включить распознавание", "Проверьте разрешение на микрофон и нажмите кнопку ещё раз.");
         }
       }
 
@@ -1889,11 +1940,11 @@
         if (!state.live && !state.stream && !state.screenStream && !state.roomRole) return;
         if (state.roomRole) endGuestRoom();
         stopRecording();
+        stopSpeechRecognition();
         state.live = false;
         clearInterval(state.interval);
         clearTimeout(state.chatTimeout);
         clearTimeout(state.toastTimeout);
-        stopSpeechRecognition();
         state.birthdayTimeouts.forEach(clearTimeout);
         state.birthdayTimeouts = [];
         state.dialogueTimeouts.forEach(clearTimeout);
@@ -1951,9 +2002,12 @@
         }
         updatePeerSenders();
       });
-      $("speechButton").addEventListener("click", () => {
-        if (state.speechEnabled) stopSpeechRecognition();
-        else startSpeechRecognition();
+      $("speechButton").addEventListener("click", async () => {
+        if (state.speechEnabled) {
+          stopSpeechRecognition();
+          return;
+        }
+        await startSpeechRecognition();
       });
       $("flipButton").addEventListener("click", flipCamera);
       $("flipButtonMobile").addEventListener("click", flipCamera);
