@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0e0e10">
-  <title>TWITCH SIM — симулятор стрима</title>
+  <title>TWITCH — симулятор стрима</title>
   <style>
     :root {
       color-scheme: dark;
@@ -244,10 +244,10 @@
     <header class="topbar">
       <div class="brand" aria-label="Twitch Simulator">
         <svg class="brand-mark" viewBox="0 0 28 30" fill="none" aria-hidden="true"><path fill="currentColor" d="M3 1h24v17l-7 7h-5l-4 4v-4H4V5l-1-4Z"/><path fill="#18181b" d="M7 5h16v11l-4 4h-5l-3 3v-3H7V5Z"/><path fill="currentColor" d="M12 8h2v7h-2zm6 0h2v7h-2z"/></svg>
-        <span>TWITCH <em>SIM</em></span>
+        <span>TWITCH</span>
       </div>
       <div class="top-divider"></div>
-      <div class="top-title"><strong>Мой первый стрим</strong><span>Личная студия вещания</span></div>
+      <div class="top-title"><strong>Личная студия вещания</strong></div>
       <div class="top-live" id="topStatus"><i class="live-dot"></i><span id="topStatusText">НЕ В ЭФИРЕ</span></div>
     </header>
 
@@ -275,10 +275,10 @@
           <div class="toast" id="errorToast" role="alert" hidden><strong id="errorTitle"></strong><span id="errorText"></span></div>
           <aside class="chat-panel" id="chatPanel" aria-label="Комментарии трансляции">
             <div class="chat-feed" id="chatFeed" aria-live="polite"></div>
-            <form class="chat-foot" id="chatForm">
+            <form class="chat-foot" id="chatForm" hidden>
               <div class="chat-input-row">
-                <input class="chat-input" id="chatInput" maxlength="160" autocomplete="off" placeholder="Написать комментарий..." aria-label="Комментарий к трансляции">
-                <button class="chat-send" id="chatSend" type="submit" aria-label="Отправить комментарий">
+                <input class="chat-input" id="chatInput" maxlength="160" autocomplete="off" placeholder="Написать комментарий..." aria-label="Комментарий к трансляции" disabled hidden>
+                <button class="chat-send" id="chatSend" type="submit" aria-label="Отправить комментарий" disabled hidden>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
                 </button>
               </div>
@@ -288,7 +288,7 @@
         <section class="stream-info">
           <div class="avatar-main" aria-hidden="true">🎮</div>
           <div class="stream-copy">
-            <strong>Мой первый стрим</strong>
+            <strong>Личная студия вещания</strong>
             <span>Просто общаемся и хорошо проводим время <span class="tag">Общение</span></span>
           </div>
           <div class="stream-actions">
@@ -401,6 +401,7 @@
         questionCooldownUntil: 0,
         topicCooldowns: Object.create(null),
         recentBotMessages: [],
+        chatContext: { recentMessages: [], participants: new Set(), activeTopic: null, lastEvent: null },
         lastDialogueIndex: -1,
         lastChatTopic: null,
         birthdayTimeouts: [],
@@ -438,6 +439,20 @@
         "ого, сколько нас уже!", "люблю такие спокойные эфиры", "передаю привет стримеру!", "💜💜💜",
         "только подключился, что пропустил?", "хорошая тема для разговора", "ура, я успел на эфир"
       ];
+      const viewerProfiles = {
+        LunaPixel: { role: "fan", interests: ["games", "music"], tone: "warm", reactions: ["согласна", "классная идея", "я за это", "вот это да"] },
+        M0onCat: { role: "joker", interests: ["games", "movies"], tone: "playful", reactions: ["😂", "ну это уже мем", "это очень по мне", "неплохо, не спорю"] },
+        Kaktusik: { role: "observer", interests: ["food", "general"], tone: "calm", reactions: ["спокойно", "по-моему логично", "мне нравится", "согласен, но без фанатизма"] },
+        neon_fox: { role: "cheerleader", interests: ["music", "general"], tone: "enthusiastic", reactions: ["держим", "супер", "обожаю это", "вот это энергия"] },
+        sh0gun: { role: "analyst", interests: ["games", "general"], tone: "sharp", reactions: ["логично", "сейчас это имеет смысл", "это было бы интересно", "я бы выбрал так"] },
+        mila_mila: { role: "friendly", interests: ["music", "food"], tone: "soft", reactions: ["мне очень нравится", "приятно", "красиво", "сразу теплеет на душе"] },
+        QuietStorm: { role: "listener", interests: ["movies", "general"], tone: "thoughtful", reactions: ["интересно", "это звучит в тему", "я как раз об этом думал", "хм, хороший нюанс"] },
+        vanya_live: { role: "newcomer", interests: ["music", "general"], tone: "curious", reactions: ["сразу понятно", "не ожидал", "вот это интересно", "да, мне тоже нравится"] },
+        pandaTea: { role: "supporter", interests: ["food", "general"], tone: "kind", reactions: ["сейчас это как раз в тему", "очень уютно", "мне нравится", "всё отлично"] },
+        pixel_nika: { role: "questioner", interests: ["games", "food"], tone: "curious", reactions: ["а как вы это считаете?", "и кто ещё так думает?", "это правда звучит интересно", "я бы уточнил"] },
+        frogEnjoyer: { role: "optimist", interests: ["games", "general"], tone: "light", reactions: ["это звучит отлично", "супер уютно", "я в этом лагере", "понятное дело"] },
+        NightOwl: { role: "observer", interests: ["weather", "movies"], tone: "reflective", reactions: ["в этом есть смысл", "спокойно и хорошо", "иногда так и лучше", "мне это ближе"] }
+      };
       const birthdayGreetings = [
         ["mila_mila", "#ffc857", "🌼", "Макар, с днём рождения! 🎂 Желаю счастья и классного дня!"],
         ["neon_fox", "#ff8298", "🦊", "С праздником, Макар! Пусть все мечты сбываются 🎉"],
@@ -1450,6 +1465,7 @@
 
       function handleRecognizedSpeech(transcript) {
         if (!state.live || !transcript.trim()) return;
+        state.chatContext.lastEvent = `речь: ${transcript.trim().slice(0, 80)}`;
         if (isBirthdayTrigger(transcript)) {
           startBirthdayGreetings();
           return;
@@ -1596,9 +1612,12 @@
         $("viewerBadge").hidden = !isLive;
         $("viewsBadge").hidden = !isLive;
         $("timerBadge").hidden = !isLive;
-        $("controlHint").textContent = isLive ? "Эфир идёт · чат симулируется" : "Камера и микрофон запросят доступ";
-        $("chatInput").disabled = !isLive;
-        $("chatSend").disabled = !isLive;
+        $("controlHint").textContent = isLive ? "Эфир идёт · чат заполняется автоматически" : "Камера и микрофон запросят доступ";
+        $("chatForm").hidden = true;
+        $("chatInput").hidden = true;
+        $("chatInput").disabled = true;
+        $("chatSend").hidden = true;
+        $("chatSend").disabled = true;
         if (!isLive) $("cameraLabel").hidden = true;
       }
 
@@ -1615,12 +1634,83 @@
         $("timerBadge").textContent = formatDuration(Math.floor((Date.now() - state.startedAt) / 1000));
       }
 
+      function getViewerProfile(name) {
+        return viewerProfiles[name] || { role: "neutral", interests: ["general"], tone: "neutral", reactions: ["интересно", "согласен", "классно", "ага"] };
+      }
+
+      function getRecentChatContext() {
+        const recentMessages = state.chatContext.recentMessages.slice(-10);
+        const lastMessage = recentMessages[recentMessages.length - 1] || null;
+        const topic = state.lastChatTopic && state.lastChatTopic.expiresAt > Date.now()
+          ? findTopic(state.lastChatTopic.text)
+          : null;
+        return { recentMessages, lastMessage, topic };
+      }
+
+      function buildContextualMessage(name) {
+        const profile = getViewerProfile(name);
+        const { recentMessages, lastMessage, topic } = getRecentChatContext();
+        const isReplying = lastMessage && lastMessage.name !== name && Math.random() < 0.7;
+        const directReply = isReplying ? lastMessage.text : null;
+        const baseVariations = {
+          fan: ["согласен", "точно", "я за это", "классная идея", "вот это да"],
+          joker: ["😂", "это уже мем", "ну это по мне", "не спорю", "с этой репликой я согласен"],
+          observer: ["мне кажется логично", "спокойно и по делу", "в этом есть смысл", "очень достойно"],
+          cheerleader: ["держим", "вот это энергия", "круто", "супер", "всё отлично"],
+          analyst: ["логично", "сейчас уже понятно", "я бы выбрал так", "есть смысл"],
+          friendly: ["мне нравится", "приятно читать", "очень мило", "красиво"],
+          listener: ["интересно", "вот это звучит в тему", "хм, хороший нюанс", "с этим можно согласиться"],
+          newcomer: ["сразу понятно", "это интересно", "не ожидал", "да, мне тоже нравится"],
+          supporter: ["всё очень уютно", "мне нравится", "очень приятно", "сейчас это в тему"],
+          questioner: ["а как вы это считаете?", "и кто ещё так думает?", "действительно интересно", "я бы уточнил"],
+          optimist: ["это звучит отлично", "супер уютно", "я за это", "чудесная атмосфера"],
+          neutral: ["интересно", "согласен", "классно", "ага"]
+        };
+
+        if (directReply) {
+          const replyText = directReply.toLowerCase();
+          if (/[?\?]/u.test(directReply) || /(как|почему|когда|кто|что|зачем|можешь|думаешь|поделитесь|посоветуйте)/iu.test(replyText)) {
+            return `${profile.reactions[Math.floor(Math.random() * profile.reactions.length)]} — ${profile.role === "questioner" ? "а как ещё можно смотреть на это?" : "с этим тоже можно согласиться"}`;
+          }
+          if (/(согласен|класс|интересно|круто|удобно|мне нравится|привет|хорошо)/iu.test(replyText)) {
+            return `${profile.reactions[Math.floor(Math.random() * profile.reactions.length)]}, и это очень в тему.`;
+          }
+          if (/(ошиб|неудач|плохо|не очень|туп|слаб)/iu.test(replyText)) {
+            return `${profile.role === "joker" ? "😂" : "ну, можно и так"}, но я бы не драматизировал.`;
+          }
+        }
+
+        if (topic && Math.random() < 0.7) {
+          const topicPhrases = {
+            games: ["в играх с хорошей атмосферой это особенно ощущается", "я бы ещё добавил чуть больше живости в эту тему", "с этим я согласен — атмосфера важнее всего"],
+            music: ["музыка сразу задаёт настроение", "тут точно есть своя атмосфера", "эта тема очень хорошо звучит"],
+            food: ["сейчас это особенно актуально", "с таким настроением захотелось чего-нибудь вкусного", "вот это уже уютно"],
+            movies: ["с фильмами тоже есть что обсуждать", "добавил бы ещё немного атмосферы", "это как раз в тему"],
+            weather: ["под такую погоду это особенно подходит", "вот это как раз уютно", "сейчас это очень к месту"]
+          };
+          const phraseList = topicPhrases[topic.id] || ["сейчас это вполне уместно", "идеально в тему", "да, это звучит правильно"];
+          return `${baseVariations[profile.role] ? baseVariations[profile.role][Math.floor(Math.random() * baseVariations[profile.role].length)] : profile.reactions[0]}, ${phraseList[Math.floor(Math.random() * phraseList.length)]}.`;
+        }
+
+        if (state.chatContext.lastEvent && Math.random() < 0.8) {
+          const eventText = state.chatContext.lastEvent;
+          if (eventText.includes("в эфире") || eventText.includes("стрим")) return `${profile.reactions[Math.floor(Math.random() * profile.reactions.length)]} — атмосфера сегодня реально хорошая.`;
+        }
+
+        return `${profile.reactions[Math.floor(Math.random() * profile.reactions.length)]} — ${messages[Math.floor(Math.random() * messages.length)]}`;
+      }
+
       function addChatMessage(name, color, avatar, text, own = false) {
         const normalized = text.toLocaleLowerCase("ru-RU").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
         if (!normalized || state.recentBotMessages.includes(normalized)) return;
         state.recentBotMessages.push(normalized);
         if (state.recentBotMessages.length > 24) state.recentBotMessages.shift();
-        if (!own) state.lastChatTopic = { text, expiresAt: Date.now() + 60000 };
+        if (!own) {
+          state.lastChatTopic = { text, expiresAt: Date.now() + 60000 };
+          state.chatContext.recentMessages.push({ name, text, at: Date.now() });
+          if (state.chatContext.recentMessages.length > 18) state.chatContext.recentMessages.shift();
+          state.chatContext.participants.add(name);
+        }
         const line = document.createElement("div");
         line.className = "chat-line";
         const face = document.createElement("span");
@@ -1645,14 +1735,17 @@
 
       function scheduleChat() {
         if (!state.live) return;
-        const delay = 2600 + Math.random() * 5300;
+        const delay = 1800 + Math.random() * 4200;
         state.chatTimeout = setTimeout(() => {
           if (!state.live) return;
-          const [name, color, avatar] = personas[Math.floor(Math.random() * personas.length)];
-          const message = messages[Math.floor(Math.random() * messages.length)];
+          const viewers = Object.keys(viewerProfiles);
+          const viewerName = viewers[Math.floor(Math.random() * viewers.length)];
+          const [name, color, avatar] = personas.find(([personName]) => personName === viewerName) || personas[Math.floor(Math.random() * personas.length)];
+          const message = buildContextualMessage(name);
           addChatMessage(name, color, avatar, message);
-          if (Math.random() < 0.22) {
-            scheduleViewerDialogue(getConversationForContext(), 1700);
+          if (Math.random() < 0.25) {
+            const contextDialogue = getConversationForContext();
+            if (contextDialogue) scheduleViewerDialogue(contextDialogue, 1200 + Math.random() * 1500);
           }
           scheduleChat();
         }, delay);
@@ -1680,6 +1773,9 @@
           state.birthdayTimeouts = [];
           state.dialogueTimeouts = [];
           state.recentBotMessages = [];
+          state.chatContext.recentMessages = [];
+          state.chatContext.participants = new Set();
+          state.chatContext.lastEvent = "эфир начался";
           state.lastChatTopic = null;
           state.lastDialogueIndex = -1;
           state.viewers = 8 + Math.floor(Math.random() * 24);
@@ -1721,6 +1817,7 @@
         state.dialogueTimeouts = [];
         state.interval = null;
         state.chatTimeout = null;
+        state.chatContext.lastEvent = "эфир завершён";
         const screenStream = state.screenStream;
         state.screenStream = null;
         screenStream?.getTracks().forEach((track) => track.stop());
@@ -1827,11 +1924,10 @@
       });
       $("chatForm").addEventListener("submit", (event) => {
         event.preventDefault();
-        const text = $("chatInput").value.trim();
-        if (!text || !state.live) return;
-        addChatMessage("Вы", "#bf94ff", "💜", text, false);
-        if (isBirthdayTrigger(text)) startBirthdayGreetings();
-        $("chatInput").value = "";
+        const input = $("chatInput");
+        const text = input.value.trim();
+        if (!text || !state.live || input.hidden || input.disabled || $("chatForm").hidden) return;
+        input.value = "";
         state.wasNearBottom = true;
         chatFeed.scrollTop = chatFeed.scrollHeight;
       });
@@ -1859,5 +1955,6 @@
       }
     })();
   </script>
+  <script src="ai-chat.js"></script>
 </body>
 </html>
